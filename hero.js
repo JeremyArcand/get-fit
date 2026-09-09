@@ -315,6 +315,7 @@ function runLiveTick(){
 
 function animateFight(result){
   animating = true;
+  playHeroAttack(); // 12 frames x 80 ms = 960 ms, terminé avant le résultat
   const fill = document.getElementById("dungeonHpFill");
   fill.style.transition = "none";
   fill.style.width = "100%";
