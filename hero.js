@@ -73,8 +73,12 @@ function totalStats(){
   };
 }
 
+// Force de base pour la moitié, puis le bonus d'arme en entier : une arme
+// rare pèse ainsi vraiment dans les dégâts.
 function attackDamage(){
-  return 3 + Math.round(totalStats().force / 2);
+  const weapon = equippedWeapon();
+  const weaponForce = weapon && weapon.bonus.force ? weapon.bonus.force : 0;
+  return 3 + Math.round(state.hero.stats.force / 2) + weaponForce;
 }
 
 function bonusLabel(bonus){
