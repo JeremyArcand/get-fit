@@ -248,6 +248,82 @@
       <p class="disclaimer">Je suis un assistant IA, pas un professionnel de la santé. Consulte ton médecin de famille avant de commencer un nouveau régime.</p>
     </section>
 
+    <!-- ===================== VUE MON HÉROS ===================== -->
+    <section id="view-hero" class="view" hidden>
+      <header class="app-header">
+        <div class="header-top">
+          <div>
+            <h1>Mon Héros</h1>
+            <p class="date-sub">Ta progression se gagne à l'entraînement</p>
+          </div>
+        </div>
+      </header>
+
+      <div class="grid">
+      <div class="card hero-card-char">
+        <div class="hero-head">
+          <input type="text" id="heroName" class="hero-name-input" maxlength="24" aria-label="Nom du héros">
+          <span class="hero-level" id="heroLevel">Niveau 1</span>
+        </div>
+        <div class="hero-bar-label">
+          <span>Expérience</span>
+          <span id="heroXpText">0 / 50 XP</span>
+        </div>
+        <div class="water-bar"><div class="water-fill" id="heroXpFill" style="width:0%"></div></div>
+        <div class="hero-stats">
+          <div class="hero-stat">
+            <span class="hero-stat-val" id="heroStat-force">5</span>
+            <span class="hero-stat-name">Force</span>
+          </div>
+          <div class="hero-stat">
+            <span class="hero-stat-val" id="heroStat-endurance">5</span>
+            <span class="hero-stat-name">Endurance</span>
+          </div>
+          <div class="hero-stat">
+            <span class="hero-stat-val" id="heroStat-vitesse">5</span>
+            <span class="hero-stat-name">Vitesse</span>
+          </div>
+        </div>
+        <div class="hero-gold">🪙 <span id="heroGold">0</span> or</div>
+      </div>
+
+      <div class="card hero-fight-card">
+        <h2>Combat</h2>
+        <div class="hero-bar-label">
+          <span class="monster-name" id="monsterName">—</span>
+          <span id="monsterHpText">0 / 0 PV</span>
+        </div>
+        <div class="water-bar"><div class="hp-fill" id="monsterHpFill" style="width:100%"></div></div>
+        <p class="monster-reward" id="monsterReward">—</p>
+        <button class="btn-primary hero-attack" id="attackBtn">Attaquer</button>
+        <p class="attack-hint" id="attackHint">—</p>
+      </div>
+
+      <div class="card hero-shop-card">
+        <h2>Boutique</h2>
+        <div class="chest-row">
+          <button class="btn-secondary chest-btn" id="chestCommonBtn">
+            <span class="chest-icon">📦</span>
+            <span class="chest-name">Coffre commun</span>
+            <span class="chest-price">🪙 25 or</span>
+          </button>
+          <button class="btn-secondary chest-btn" id="chestRareBtn">
+            <span class="chest-icon">🎁</span>
+            <span class="chest-name">Coffre rare</span>
+            <span class="chest-price">🪙 60 or</span>
+          </button>
+        </div>
+      </div>
+
+      <div class="card hero-inventory-card">
+        <h2>Inventaire</h2>
+        <div id="heroInventory"></div>
+      </div>
+      </div>
+
+      <p class="disclaimer">Je suis un assistant IA, pas un professionnel de la santé. Consulte ton médecin de famille avant de commencer un nouveau régime.</p>
+    </section>
+
   </div>
 
 <div class="toast" id="toast" hidden></div>
