@@ -1169,6 +1169,9 @@
         if(payload.unit !== "lbs"){ convertSessionsToLbs(payload.templates); }
         state.workout.templates = payload.templates;
       }
+      if(payload.weeklyGoal !== undefined){
+        state.workout.weeklyGoal = normalizeGoal(payload.weeklyGoal);
+      }
       saveNutri();
       saveWorkout();
       renderNutrition();
