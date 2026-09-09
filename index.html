@@ -587,6 +587,36 @@
       </header>
 
       <div class="grid">
+      <div class="card goal-card">
+        <h2>Objectif de la semaine</h2>
+        <div class="goal-body">
+          <div class="goal-ring-wrap">
+            <svg class="goal-ring" viewBox="0 0 120 120">
+              <defs>
+                <linearGradient id="goalGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+                  <stop offset="0%" stop-color="#2563EB"/>
+                  <stop offset="100%" stop-color="#4F8BFF"/>
+                </linearGradient>
+              </defs>
+              <circle class="gring-bg" cx="60" cy="60" r="50"/>
+              <circle class="gring-fg" id="goalRing" cx="60" cy="60" r="50"/>
+            </svg>
+            <div class="goal-ring-center">
+              <span class="goal-count" id="goalCount">0</span>
+              <span class="goal-of" id="goalOf">/ 4</span>
+            </div>
+          </div>
+          <div class="goal-side">
+            <div class="goal-streak" id="goalStreak">🔥 0 semaine</div>
+            <div class="goal-sub" id="goalSub">—</div>
+            <label class="goal-edit" for="weeklyGoalInput">
+              <span>Séances / semaine</span>
+              <input type="number" id="weeklyGoalInput" min="1" max="14" step="1" inputmode="numeric">
+            </label>
+          </div>
+        </div>
+      </div>
+
       <div class="card templates-card" id="templatesCard" hidden>
         <h2>Mes modèles</h2>
         <div class="template-list" id="templateList"></div>
