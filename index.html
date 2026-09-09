@@ -1404,6 +1404,7 @@
         html += '<input type="number" min="0" inputmode="numeric" placeholder="0" value="'+escapeAttr(set.reps)+'" data-ex="'+ex.id+'" data-set="'+sIdx+'" data-field="reps">';
         html += '<input type="number" min="0" step="0.5" inputmode="decimal" placeholder="0" value="'+escapeAttr(set.weight)+'" data-ex="'+ex.id+'" data-set="'+sIdx+'" data-field="weight">';
         html += '<div class="set-actions">';
+        html += '<button class="set-btn" title="Minuteur de repos" aria-label="Démarrer le minuteur de repos" data-rest-set>'+TIMER_ICON+'</button>';
         html += '<button class="set-btn is-copy" title="Copier cette série" aria-label="Copier cette série" data-copy-set data-ex="'+ex.id+'" data-set="'+sIdx+'">'+COPY_ICON+'</button>';
         if(ex.sets.length > 1){
           html += '<button class="set-btn" title="Supprimer cette série" aria-label="Supprimer cette série" data-remove-set data-ex="'+ex.id+'" data-set="'+sIdx+'"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round"><line x1="5" y1="5" x2="19" y2="19"/><line x1="19" y1="5" x2="5" y2="19"/></svg></button>';
