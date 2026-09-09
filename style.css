@@ -498,7 +498,10 @@ textarea, input[type="text"], input[type="number"], input[type="date"], select, 
 @media (max-width:520px){
   .screen{padding:16px 12px calc(36px + env(safe-area-inset-bottom,0px));}
   .topbar-inner{padding:8px 12px;}
-  .tab-btn{padding:9px 11px;}
+  /* Trois onglets + bouton de thème : il faut resserrer pour éviter le chevauchement. */
+  .tabs{gap:4px;}
+  .tab-btn{padding:9px 8px;font-size:13px;gap:5px;}
+  .tab-btn svg{width:17px;height:17px;}
   .card{padding:16px;}
   .header-top h1{font-size:26px;}
   .ring-wrap{width:176px;height:176px;}
