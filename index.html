@@ -1219,26 +1219,50 @@
     showToast("Modèle « " + name + " » enregistré.");
   });
 
+  // Dernières séries réellement effectuées pour un exercice, séance la plus récente d'abord.
+  function lastPerformance(name){
+    const sorted = state.workout.sessions.slice().sort(function(a,b){ return b.date.localeCompare(a.date); });
+    for(let i=0; i<sorted.length; i++){
+      const ex = sorted[i].exercises.find(function(e){ return e.name === name; });
+      if(ex && ex.sets.length) return ex.sets;
+    }
+    return null;
+  }
+
+  // Un modèle repart des valeurs du dernier entraînement pour pouvoir viser plus haut ;
+  // à défaut d'historique, il retombe sur les valeurs enregistrées dans le modèle.
+  function setsForTemplate(ex){
+    const last = lastPerformance(ex.name);
+    if(last){
+      return last.map(function(s){ return { reps:String(s.reps), weight:String(s.weight) }; });
+    }
+    const base = ex.sets.length ? ex.sets : [null];
+    return base.map(function(s){
+      if(!s) return newSet();
+      return { reps: s.reps ? String(s.reps) : "", weight: s.weight ? String(s.weight) : "" };
+    });
+  }
+
   document.getElementById("templateList").addEventListener("click", function(e){
     const use = e.target.closest("[data-use-template]");
     if(use){
       const tpl = state.workout.templates.find(function(t){ return t.id === use.dataset.useTemplate; });
       if(!tpl) return;
       if(builderHasData() && !confirm("Remplacer la séance en cours par le modèle « "+tpl.name+" » ?")) return;
+      let prefilled = 0;
       state.builder = {
         name: tpl.name,
         exercises: tpl.exercises.map(function(ex){
-          return {
-            id: nextId(),
-            name: ex.name,
-            // Le modèle ne fournit que la structure : les séries partent vides.
-            sets: (ex.sets.length ? ex.sets : [null]).map(function(){ return newSet(); })
-          };
+          if(lastPerformance(ex.name)){ prefilled++; }
+          return { id: nextId(), name: ex.name, sets: setsForTemplate(ex) };
         })
       };
       saveWorkout();
       renderBuilder();
       document.querySelector(".builder-card").scrollIntoView({ behavior:"smooth", block:"start" });
+      if(prefilled > 0){
+        showToast("Valeurs de ton dernier entraînement pré-remplies pour " + prefilled + " exercice" + (prefilled>1?"s":"") + ".");
+      }
       return;
     }
     const del = e.target.closest("[data-del-template]");
