@@ -117,15 +117,6 @@ function totalPower(){
   return s.force + s.endurance + s.vitesse;
 }
 
-// Le forgeage ajoute +1 à chaque bonus de l'objet, par niveau d'amélioration.
-function effectiveBonus(item){
-  const out = {};
-  Object.keys(item.bonus).forEach(function(stat){
-    out[stat] = item.bonus[stat];
-  });
-  return out;
-}
-
 function bonusLabel(bonus){
   return Object.keys(bonus).map(function(stat){
     return "+" + bonus[stat] + " " + stat;
