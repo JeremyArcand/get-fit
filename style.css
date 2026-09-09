@@ -457,6 +457,22 @@ select#exerciseSelect{margin-bottom:14px;font-weight:600;}
 .card-sub{font-size:12px;font-weight:600;color:var(--text-tertiary);}
 
 /* Donjon automatique */
+.hero-sprite-wrap{
+  display:flex;align-items:center;justify-content:center;
+  height:150px;margin-bottom:12px;
+}
+.hero-sprite{
+  height:100%;width:auto;max-width:100%;
+  object-fit:contain;
+  image-rendering:auto;
+  -webkit-user-drag:none;user-select:none;
+}
+.hero-sprite[hidden]{display:none;}
+.hero-sprite-fallback{
+  width:96px;height:96px;color:var(--text-tertiary);
+}
+.hero-sprite-fallback[hidden]{display:none;}
+
 .dungeon-stage{font-size:14px;font-weight:700;color:var(--text);}
 .hp-fill{
   height:100%;border-radius:6px;
