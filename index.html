@@ -1680,7 +1680,7 @@
     }
     const session = {
       id: nextId(),
-      date: todayISO(),
+      date: normalizeSessionDate(state.builder.date),
       name: state.builder.name.trim() || "Séance",
       exercises: cleanExercises
     };
