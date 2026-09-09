@@ -10,9 +10,24 @@
      via une vraie séance loggée dans workout.js.
    ================================================================ */
 
-const DUNGEON_TICK_SECONDS = 20;
-const MAX_OFFLINE_TICKS = 100;
+const DUNGEON_TICK_SECONDS = 1;
+const BOSS_TIME_LIMIT_SECONDS = 60;
+const MAX_OFFLINE_SECONDS = 1800; // 30 min de rattrapage maximum
 const DUNGEON_MAX_STAGE = 10;
+
+// Un monstre par palier ; le palier 10 est le boss.
+const MONSTER_ROSTER = [
+  { name: "Gobelin poussif",    icon: "👺" },
+  { name: "Loup des landes",    icon: "🐺" },
+  { name: "Golem de pierre",    icon: "🗿" },
+  { name: "Spectre affamé",     icon: "👻" },
+  { name: "Ogre bedonnant",     icon: "👹" },
+  { name: "Basilic endormi",    icon: "🐍" },
+  { name: "Chevalier déchu",    icon: "⚔️" },
+  { name: "Hydre à deux têtes", icon: "🐉" },
+  { name: "Démon de la fonte",  icon: "😈" },
+  { name: "Dragon d'acier",     icon: "🐲" }
+];
 
 // Sprites du héros (frames exportées de Spritesheets.ai, 1 sur 5 conservée).
 const HERO_ATTACK_FRAME_COUNT = 12;
