@@ -1392,6 +1392,7 @@
       let prefilled = 0;
       state.builder = {
         name: tpl.name,
+        date: todayISO(),
         exercises: tpl.exercises.map(function(ex){
           if(lastPerformance(ex.name)){ prefilled++; }
           return { id: nextId(), name: ex.name, sets: setsForTemplate(ex) };
