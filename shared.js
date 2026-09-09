@@ -324,8 +324,12 @@ document.getElementById("restoreBtn").addEventListener("click", function(){
     if(payload.weeklyGoal !== undefined){
       state.workout.weeklyGoal = normalizeGoal(payload.weeklyGoal);
     }
+    if(payload.hero){
+      state.hero = normalizeHero(payload.hero);
+    }
     saveNutri();
     saveWorkout();
+    saveHero();
     renderAll();
     note.textContent = "Restauration réussie.";
     document.getElementById("restoreInput").value = "";
