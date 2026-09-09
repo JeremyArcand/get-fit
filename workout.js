@@ -504,11 +504,16 @@ document.getElementById("finishSessionBtn").addEventListener("click", function()
   saveWorkout();
   renderWorkout();
 
+  let prMessage = "";
   if(beaten.length > 0){
     const shown = beaten.slice(0,2).join(", ");
     const extra = beaten.length > 2 ? " (+" + (beaten.length-2) + ")" : "";
-    showToast("🏆 Nouveau record : " + shown + extra);
+    prMessage = "🏆 Nouveau record : " + shown + extra;
   }
+
+  // Seule porte d'entrée vers la progression du héros : une séance finalisée.
+  // hero.js affiche le message final, record inclus.
+  onWorkoutCompleted(session, { hasPR: beaten.length > 0, prMessage: prMessage });
 });
 
 function sessionSetCount(session){
