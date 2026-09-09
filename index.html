@@ -1143,10 +1143,244 @@
 
   function renderWorkout(){
     document.getElementById("workoutDateSub").textContent = formatLongFR(todayISO());
+    renderTemplates();
     renderBuilder();
     renderSessionHistory();
     renderExerciseSelect();
     renderProgress();
+    renderRecords();
+  }
+
+  /* ================= NOTIFICATION PASSAGÈRE ================= */
+  let toastTimer = null;
+  function showToast(msg){
+    const el = document.getElementById("toast");
+    el.textContent = msg;
+    el.hidden = false;
+    // Force un reflow pour que la transition parte de l'état masqué.
+    void el.offsetWidth;
+    el.classList.add("show");
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(function(){
+      el.classList.remove("show");
+      setTimeout(function(){ el.hidden = true; }, 300);
+    }, 4000);
+  }
+
+  /* ================= MODÈLES DE SÉANCE ================= */
+  function renderTemplates(){
+    const card = document.getElementById("templatesCard");
+    const list = document.getElementById("templateList");
+    const templates = state.workout.templates;
+    card.hidden = templates.length === 0;
+    if(templates.length === 0){ list.innerHTML = ""; return; }
+    list.innerHTML = templates.map(function(t){
+      const count = t.exercises.length;
+      return '<span class="template-chip">' +
+        '<button class="tpl-use" data-use-template="'+t.id+'">'+escapeHtml(t.name)+
+        ' <span style="color:var(--text-tertiary);font-weight:600">· '+count+' ex.</span></button>' +
+        '<button class="tpl-del" data-del-template="'+t.id+'" aria-label="Supprimer ce modèle">' +
+        '<svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round"><line x1="5" y1="5" x2="19" y2="19"/><line x1="19" y1="5" x2="5" y2="19"/></svg>' +
+        '</button></span>';
+    }).join("");
+  }
+
+  document.getElementById("saveTemplateBtn").addEventListener("click", function(){
+    const exercises = state.builder.exercises
+      .map(function(ex){
+        return {
+          name: (ex.name||"").trim(),
+          sets: ex.sets.map(function(s){ return { reps:Number(s.reps)||0, weight:Number(s.weight)||0 }; })
+        };
+      })
+      .filter(function(ex){ return ex.name !== ""; });
+
+    if(exercises.length === 0){
+      showToast("Nomme au moins un exercice avant d'enregistrer un modèle.");
+      return;
+    }
+    const name = (prompt("Nom du modèle :", state.builder.name.trim() || "Mon modèle") || "").trim();
+    if(name === "") return;
+
+    state.workout.templates.push({ id: nextId(), name: name, exercises: exercises });
+    saveWorkout();
+    renderTemplates();
+    showToast("Modèle « " + name + " » enregistré.");
+  });
+
+  document.getElementById("templateList").addEventListener("click", function(e){
+    const use = e.target.closest("[data-use-template]");
+    if(use){
+      const tpl = state.workout.templates.find(function(t){ return t.id === use.dataset.useTemplate; });
+      if(!tpl) return;
+      if(builderHasData() && !confirm("Remplacer la séance en cours par le modèle « "+tpl.name+" » ?")) return;
+      state.builder = {
+        name: tpl.name,
+        exercises: tpl.exercises.map(function(ex){
+          return {
+            id: nextId(),
+            name: ex.name,
+            // Le modèle ne fournit que la structure : les séries partent vides.
+            sets: (ex.sets.length ? ex.sets : [null]).map(function(){ return newSet(); })
+          };
+        })
+      };
+      saveWorkout();
+      renderBuilder();
+      document.querySelector(".builder-card").scrollIntoView({ behavior:"smooth", block:"start" });
+      return;
+    }
+    const del = e.target.closest("[data-del-template]");
+    if(del){
+      const tpl = state.workout.templates.find(function(t){ return t.id === del.dataset.delTemplate; });
+      if(!tpl || !confirm("Supprimer le modèle « "+tpl.name+" » ?")) return;
+      state.workout.templates = state.workout.templates.filter(function(t){ return t.id !== del.dataset.delTemplate; });
+      saveWorkout();
+      renderTemplates();
+    }
+  });
+
+  /* ================= MINUTEUR DE REPOS ================= */
+  let restTimer = null;
+  let restDuration = 90;
+  let audioCtx = null;
+  let restDoneTimer = null;
+
+  function ensureAudio(){
+    try{
+      const Ctx = window.AudioContext || window.webkitAudioContext;
+      if(!Ctx) return;
+      if(!audioCtx){ audioCtx = new Ctx(); }
+      if(audioCtx.state === "suspended"){ audioCtx.resume(); }
+    }catch(e){ audioCtx = null; }
+  }
+
+  function beep(){
+    if(!audioCtx) return;
+    try{
+      const now = audioCtx.currentTime;
+      const osc = audioCtx.createOscillator();
+      const gain = audioCtx.createGain();
+      osc.type = "sine";
+      osc.frequency.setValueAtTime(880, now);
+      gain.gain.setValueAtTime(0.0001, now);
+      gain.gain.exponentialRampToValueAtTime(0.15, now + 0.02);
+      gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.4);
+      osc.connect(gain);
+      gain.connect(audioCtx.destination);
+      osc.start(now);
+      osc.stop(now + 0.42);
+    }catch(e){}
+  }
+
+  function fmtClock(seconds){
+    const s = Math.max(0, Math.ceil(seconds));
+    return Math.floor(s/60) + ":" + (s%60 < 10 ? "0" : "") + (s%60);
+  }
+
+  function startRest(seconds){
+    // Un seul minuteur à la fois : le nouveau remplace l'ancien.
+    clearRestInterval();
+    ensureAudio();
+    restDuration = seconds;
+    restTimer = { endsAt: Date.now() + seconds*1000, interval: setInterval(tickRest, 200) };
+    const bar = document.getElementById("restBar");
+    bar.classList.remove("is-done");
+    bar.hidden = false;
+    clearTimeout(restDoneTimer);
+    renderRest();
+  }
+
+  function clearRestInterval(){
+    if(restTimer){ clearInterval(restTimer.interval); restTimer = null; }
+  }
+
+  function stopRest(){
+    clearRestInterval();
+    document.getElementById("restBar").hidden = true;
+    document.getElementById("restBar").classList.remove("is-done");
+  }
+
+  function tickRest(){
+    if(!restTimer) return;
+    if(Date.now() >= restTimer.endsAt){ finishRest(); return; }
+    renderRest();
+  }
+
+  function finishRest(){
+    clearRestInterval();
+    const bar = document.getElementById("restBar");
+    document.getElementById("restTime").textContent = "0:00";
+    document.getElementById("restLabel").textContent = "Repos terminé !";
+    document.getElementById("restFill").style.width = "0%";
+    bar.classList.add("is-done");
+    if(navigator.vibrate){ navigator.vibrate([200,100,200]); }
+    beep();
+    restDoneTimer = setTimeout(function(){
+      bar.classList.remove("is-done");
+      bar.hidden = true;
+    }, 5000);
+  }
+
+  function renderRest(){
+    if(!restTimer) return;
+    const remaining = (restTimer.endsAt - Date.now()) / 1000;
+    document.getElementById("restTime").textContent = fmtClock(remaining);
+    document.getElementById("restLabel").textContent = "Repos en cours";
+    document.getElementById("restFill").style.width = Math.max(0, (remaining/restDuration)*100) + "%";
+    document.querySelectorAll("#restPresets button").forEach(function(b){
+      b.classList.toggle("active", Number(b.dataset.rest) === restDuration);
+    });
+  }
+
+  document.getElementById("restStop").addEventListener("click", stopRest);
+  document.getElementById("restPresets").addEventListener("click", function(e){
+    const btn = e.target.closest("[data-rest]");
+    if(btn){ startRest(Number(btn.dataset.rest)); }
+  });
+
+  /* ================= RECORDS PERSONNELS ================= */
+  // Recalculé depuis les séances : aucune donnée supplémentaire n'est stockée.
+  function computePRs(){
+    const prs = {};
+    state.workout.sessions
+      .slice()
+      .sort(function(a,b){ return a.date.localeCompare(b.date); })
+      .forEach(function(s){
+        s.exercises.forEach(function(ex){
+          ex.sets.forEach(function(st){
+            const weight = Number(st.weight)||0;
+            const reps = Number(st.reps)||0;
+            if(weight <= 0) return;
+            const cur = prs[ex.name];
+            if(!cur || weight > cur.weight || (weight === cur.weight && reps > cur.reps)){
+              prs[ex.name] = { weight:weight, reps:reps, date:s.date, sessionId:s.id };
+            }
+          });
+        });
+      });
+    return prs;
+  }
+
+  function renderRecords(){
+    const el = document.getElementById("recordsList");
+    const prs = computePRs();
+    const names = Object.keys(prs).sort(function(a,b){ return prs[b].weight - prs[a].weight; });
+    if(names.length === 0){
+      el.innerHTML = '<p class="empty-state">Termine une séance avec des poids pour établir tes premiers records.</p>';
+      return;
+    }
+    el.innerHTML = names.map(function(name){
+      const pr = prs[name];
+      return '<div class="record-item">' +
+        '<span class="pr-badge" style="margin:0">🏆</span>' +
+        '<div class="record-info">' +
+        '<div class="record-name">'+escapeHtml(name)+'</div>' +
+        '<div class="record-meta">'+pr.reps+' rép. · '+formatShortFR(pr.date)+'</div>' +
+        '</div>' +
+        '<div class="record-weight">'+fmtWeight(pr.weight)+' lbs</div>' +
+        '</div>';
+    }).join("");
   }
 
   function renderBuilder(){
