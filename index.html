@@ -777,7 +777,8 @@
   }
   function normalizeGoal(v){
     const n = Math.round(Number(v));
-    return n >= 1 && n <= 14 ? n : 4;
+    if(!isFinite(n) || n < 1) return n === 0 ? 1 : 4;
+    return Math.min(14, n);
   }
   function saveWorkout(){
     localStorage.setItem(WORKOUT_KEY, JSON.stringify({
