@@ -1,13 +1,13 @@
 "use strict";
 
 /* ================================================================
-   SOCLE COMMUN — état global, constantes, utilitaires de date,
-   thème, navigation entre onglets, sauvegarde/restauration.
-   Chargé en premier : expose l'objet global GF utilisé par les
-   autres fichiers (nutrition.js, workout.js, ...).
+   SOCLE COMMUN — état global, constantes, utilitaires de date, thème,
+   navigation entre onglets, sauvegarde/restauration.
+
+   Chargé en premier. Les déclarations de ce fichier sont au niveau
+   global : les scripts chargés ensuite (nutrition.js, workout.js,
+   hero.js) les lisent et les modifient directement.
    ================================================================ */
-var GF = (function(){
-"use strict";
 
 const TARGETS = { cal:2760, protein:150, carb:401, fat:62, water:3.1 };
 
@@ -107,9 +107,47 @@ function saveWorkout(){
   }));
 }
 
+const HERO_KEY = "heroTrackerData_v1";
+
+// Remet une sauvegarde de héros en forme : un champ manquant ou corrompu
+// retombe sur sa valeur par défaut plutôt que de casser l'app.
+function normalizeHero(stored){
+  const src = stored || {};
+  const stats = src.stats || {};
+  function num(v, min, fallback){
+    const n = Math.round(Number(v));
+    return isFinite(n) && n >= min ? n : fallback;
+  }
+  return {
+    name: typeof src.name === "string" && src.name.trim() ? src.name : "Héros",
+    level: num(src.level, 1, 1),
+    xp: num(src.xp, 0, 0),
+    stats: {
+      force: num(stats.force, 1, 5),
+      endurance: num(stats.endurance, 1, 5),
+      vitesse: num(stats.vitesse, 1, 5)
+    },
+    gold: num(src.gold, 0, 0),
+    attackCharges: num(src.attackCharges, 0, 0),
+    inventory: Array.isArray(src.inventory) ? src.inventory : [],
+    equippedWeaponId: src.equippedWeaponId || null,
+    monsterIndex: num(src.monsterIndex, 0, 0),
+    currentMonster: src.currentMonster || null // généré par hero.js si absent
+  };
+}
+function loadHero(){
+  let stored = {};
+  try { stored = JSON.parse(localStorage.getItem(HERO_KEY)) || {}; } catch(e){ stored = {}; }
+  return normalizeHero(stored);
+}
+function saveHero(){
+  localStorage.setItem(HERO_KEY, JSON.stringify(state.hero));
+}
+
 const state = {
   nutri: loadNutri(),
   workout: loadWorkout(),
+  hero: loadHero(),
   viewDate: todayISO(),
   activeView: "nutrition",
   builder: { name:"", exercises:[] },
@@ -145,9 +183,9 @@ document.querySelectorAll(".theme-toggle").forEach(function(btn){
 });
 initTheme();
 
-/* ================= REGISTRE DES ONGLETS ================= */
-// Chaque fichier de domaine s'enregistre ici ; rien n'est codé en dur,
-// on peut donc ajouter un onglet sans toucher à ce fichier.
+/* ================= NAVIGATION ENTRE ONGLETS ================= */
+// Chaque fichier de domaine s'enregistre ici : aucun onglet n'est codé en
+// dur, on peut donc en ajouter un sans toucher à ce fichier.
 const views = {};
 
 function registerView(id, renderFn){
@@ -175,8 +213,8 @@ document.querySelectorAll(".tab-btn").forEach(function(btn){
   btn.addEventListener("click", function(){ showView(btn.dataset.view); });
 });
 
-// Les onglets s'enregistrent pendant l'exécution des scripts suivants ;
-// on attend donc la fin du chargement pour le premier rendu.
+// Les onglets s'enregistrent pendant l'exécution des scripts suivants :
+// on attend la fin du chargement pour le premier rendu.
 document.addEventListener("DOMContentLoaded", function(){
   renderAll();
 });
@@ -294,34 +332,3 @@ document.getElementById("restoreBtn").addEventListener("click", function(){
     note.textContent = "Ce code est invalide.";
   }
 });
-
-return {
-  state: state,
-  TARGETS: TARGETS,
-  MEAL_META: MEAL_META,
-  MEAL_ORDER: MEAL_ORDER,
-  WEEKDAYS_FR: WEEKDAYS_FR,
-  MONTHS_FR: MONTHS_FR,
-  pad: pad,
-  toISO: toISO,
-  todayISO: todayISO,
-  fromISO: fromISO,
-  addDaysISO: addDaysISO,
-  formatLongFR: formatLongFR,
-  formatShortFR: formatShortFR,
-  getWeekRange: getWeekRange,
-  escapeHtml: escapeHtml,
-  nextId: nextId,
-  saveNutri: saveNutri,
-  saveWorkout: saveWorkout,
-  normalizeGoal: normalizeGoal,
-  setRing: setRing,
-  fmtWeight: fmtWeight,
-  showToast: showToast,
-  applyTheme: applyTheme,
-  registerView: registerView,
-  renderView: renderView,
-  renderAll: renderAll,
-  showView: showView
-};
-})();

@@ -5,22 +5,6 @@
    de séance, séries, modèles, minuteur de repos, objectif hebdo,
    streak, records personnels.
    ================================================================ */
-(function(){
-"use strict";
-
-const state = GF.state;
-const todayISO = GF.todayISO;
-const addDaysISO = GF.addDaysISO;
-const formatShortFR = GF.formatShortFR;
-const formatLongFR = GF.formatLongFR;
-const getWeekRange = GF.getWeekRange;
-const escapeHtml = GF.escapeHtml;
-const nextId = GF.nextId;
-const saveWorkout = GF.saveWorkout;
-const normalizeGoal = GF.normalizeGoal;
-const setRing = GF.setRing;
-const fmtWeight = GF.fmtWeight;
-const showToast = GF.showToast;
 
 const COPY_ICON = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="12" height="12" rx="2.5"/><path d="M5.5 15H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v.5"/></svg>';
 const TIMER_ICON = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="13.5" r="7.5"/><path d="M12 10v3.5l2.4 1.5"/><path d="M9.5 2.5h5"/></svg>';
@@ -701,5 +685,4 @@ function renderProgress(){
     '<div class="pstat"><div class="pstat-val">'+formatShortFR(last.date)+'</div><div class="pstat-label">Dernière séance</div></div>';
 }
 
-GF.registerView("workout", renderWorkout);
-})();
+registerView("workout", renderWorkout);

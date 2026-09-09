@@ -4,24 +4,6 @@
    ONGLET NUTRITION — tout ce qui touche state.nutri : calories,
    macros, eau, poids corporel, journal alimentaire.
    ================================================================ */
-(function(){
-"use strict";
-
-const state = GF.state;
-const TARGETS = GF.TARGETS;
-const MEAL_META = GF.MEAL_META;
-const MEAL_ORDER = GF.MEAL_ORDER;
-const WEEKDAYS_FR = GF.WEEKDAYS_FR;
-const todayISO = GF.todayISO;
-const fromISO = GF.fromISO;
-const addDaysISO = GF.addDaysISO;
-const formatShortFR = GF.formatShortFR;
-const formatLongFR = GF.formatLongFR;
-const escapeHtml = GF.escapeHtml;
-const saveNutri = GF.saveNutri;
-const setRing = GF.setRing;
-const fmtWeight = GF.fmtWeight;
-const showToast = GF.showToast;
 
 /* ================================================================
    DONNÉES INTÉGRÉES PAR CLAUDE — source de vérité pour le journal
@@ -285,5 +267,4 @@ document.getElementById("waterMinus").addEventListener("click", function(){
   renderNutrition();
 });
 
-GF.registerView("nutrition", renderNutrition);
-})();
+registerView("nutrition", renderNutrition);
