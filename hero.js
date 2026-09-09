@@ -633,6 +633,7 @@ document.getElementById("heroName").addEventListener("blur", function(e){
 
 // L'entrée dans l'onglet crédite d'abord le temps écoulé, puis affiche.
 function showHeroView(){
+  preloadAttackFrames();
   catchUpDungeon();
   renderHero();
 }
