@@ -109,15 +109,49 @@ function saveWorkout(){
 
 const HERO_KEY = "heroTrackerData_v1";
 
+const EQUIPMENT_SLOTS = ["weapon","helmet","chestplate","leggings","ring","necklace"];
+
 // Remet une sauvegarde de héros en forme : un champ manquant ou corrompu
 // retombe sur sa valeur par défaut plutôt que de casser l'app.
+//
+// Assure aussi la migration Phase 1 -> Phase 2 : l'arme unique devient
+// l'emplacement "weapon", les objets sans emplacement en reçoivent un, et
+// attackCharges / monsterIndex / currentMonster ne sont plus recopiés.
 function normalizeHero(stored){
   const src = stored || {};
   const stats = src.stats || {};
+  const upgrades = src.essenceUpgrades || {};
+  const storedEquipment = src.equipment || {};
+  const dungeon = src.dungeon || {};
+
   function num(v, min, fallback){
     const n = Math.round(Number(v));
     return isFinite(n) && n >= min ? n : fallback;
   }
+
+  const inventory = (Array.isArray(src.inventory) ? src.inventory : [])
+    .filter(function(item){ return item && item.id; })
+    .map(function(item){
+      return {
+        id: item.id,
+        name: typeof item.name === "string" && item.name ? item.name : "Objet",
+        // En Phase 1 tout l'inventaire était des armes : c'est le repli.
+        slot: EQUIPMENT_SLOTS.indexOf(item.slot) >= 0 ? item.slot : "weapon",
+        bonus: item.bonus && typeof item.bonus === "object" ? item.bonus : {},
+        rarity: ["common","rare","legendary"].indexOf(item.rarity) >= 0 ? item.rarity : "common",
+        upgradeCount: num(item.upgradeCount, 0, 0)
+      };
+    });
+
+  // L'arme unique de la Phase 1 rejoint l'emplacement "weapon".
+  const legacyWeaponId = !src.equipment && src.equippedWeaponId ? src.equippedWeaponId : null;
+  const equipment = {};
+  EQUIPMENT_SLOTS.forEach(function(slot){
+    const id = storedEquipment[slot] || (slot === "weapon" ? legacyWeaponId : null);
+    const exists = inventory.some(function(item){ return item.id === id; });
+    equipment[slot] = exists ? id : null;
+  });
+
   return {
     name: typeof src.name === "string" && src.name.trim() ? src.name : "Héros",
     level: num(src.level, 1, 1),
@@ -127,12 +161,20 @@ function normalizeHero(stored){
       endurance: num(stats.endurance, 1, 5),
       vitesse: num(stats.vitesse, 1, 5)
     },
+    essenceUpgrades: {
+      force: num(upgrades.force, 0, 0),
+      endurance: num(upgrades.endurance, 0, 0),
+      vitesse: num(upgrades.vitesse, 0, 0)
+    },
     gold: num(src.gold, 0, 0),
-    attackCharges: num(src.attackCharges, 0, 0),
-    inventory: Array.isArray(src.inventory) ? src.inventory : [],
-    equippedWeaponId: src.equippedWeaponId || null,
-    monsterIndex: num(src.monsterIndex, 0, 0),
-    currentMonster: src.currentMonster || null // généré par hero.js si absent
+    gems: num(src.gems, 0, 0),
+    inventory: inventory,
+    equipment: equipment,
+    dungeon: {
+      stage: Math.min(10, Math.max(1, num(dungeon.stage, 1, 1))),
+      essence: num(dungeon.essence, 0, 0),
+      lastTick: num(dungeon.lastTick, 0, Date.now())
+    }
   };
 }
 function loadHero(){
