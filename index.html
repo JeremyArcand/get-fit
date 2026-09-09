@@ -1767,6 +1767,7 @@
       if(builderHasData() && !confirm("Remplacer la séance en cours par une copie de « "+session.name+" » ?")) return;
       state.builder = {
         name: session.name,
+        date: todayISO(),
         exercises: session.exercises.map(function(ex){
           return {
             id: nextId(),
