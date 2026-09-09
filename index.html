@@ -391,7 +391,12 @@
       align-items:start;
     }
     .grid > .card{margin-bottom:0;}
-    .grid > .diary-card{grid-column:1 / -1;}
+    .nutrition-grid .hero-card{grid-column:1;grid-row:1 / span 2;}
+    .nutrition-grid .macros-card{grid-column:2;grid-row:1;}
+    .nutrition-grid .water-card{grid-column:2;grid-row:2;}
+    .nutrition-grid .history-card{grid-column:1;grid-row:3;}
+    .nutrition-grid .diary-card{grid-column:2;grid-row:3;}
+    .nutrition-grid .save-card{grid-column:1 / -1;grid-row:4;}
     .workout-grid .builder-card{grid-column:1;grid-row:1 / span 2;}
     .workout-grid .history-card{grid-column:2;grid-row:1;}
     .workout-grid .progress-card{grid-column:2;grid-row:2;}
