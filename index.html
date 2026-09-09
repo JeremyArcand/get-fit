@@ -290,18 +290,28 @@
     width:28px;height:28px;flex-shrink:0;border-radius:50%;border:none;background:var(--bg);
     color:var(--danger);display:flex;align-items:center;justify-content:center;cursor:pointer;
   }
-  .set-row{display:grid;grid-template-columns:28px 1fr 1fr 26px;gap:8px;align-items:center;margin-bottom:6px;}
+  .set-row{display:grid;grid-template-columns:22px minmax(0,1fr) minmax(0,1fr) 62px;gap:6px;align-items:center;margin-bottom:6px;}
   .set-idx{font-size:12px;font-weight:700;color:var(--text-tertiary);text-align:center;}
   .set-row input{padding:7px 9px;font-size:13px;}
-  .set-del{
-    width:24px;height:24px;border-radius:50%;border:none;background:var(--bg);
+  .set-actions{display:flex;gap:6px;justify-content:flex-end;}
+  .set-btn{
+    width:28px;height:28px;border-radius:9px;border:none;background:var(--bg);
     color:var(--text-tertiary);display:flex;align-items:center;justify-content:center;cursor:pointer;
+    flex-shrink:0;transition:transform 0.15s ease;
   }
-  .set-labels{display:grid;grid-template-columns:28px 1fr 1fr 26px;gap:8px;margin-bottom:6px;}
+  .set-btn:active{transform:scale(0.9);}
+  .set-btn.is-copy{color:var(--accent-2);}
+  .set-labels{display:grid;grid-template-columns:22px minmax(0,1fr) minmax(0,1fr) 62px;gap:6px;margin-bottom:6px;}
   .set-labels span{font-size:10px;color:var(--text-tertiary);font-weight:700;text-transform:uppercase;letter-spacing:0.03em;}
   .add-set-btn{
-    background:none;border:none;color:var(--accent-2);font-size:12px;font-weight:700;cursor:pointer;padding:4px 0;
+    background:none;border:none;color:var(--accent-2);font-size:13px;font-weight:700;cursor:pointer;padding:8px 0;
   }
+  .repeat-btn{
+    width:100%;margin-top:8px;background:var(--bg-elevated-2);color:var(--accent-2);
+    border:1px solid var(--border);border-radius:12px;padding:10px;font-size:13px;font-weight:700;cursor:pointer;
+    display:flex;align-items:center;justify-content:center;gap:7px;
+  }
+  .repeat-btn:active{transform:scale(0.99);}
   .builder-actions{display:flex;gap:10px;margin-top:4px;}
   .builder-actions .btn-secondary{flex:1;}
   .builder-actions .btn-primary{flex:1;}
