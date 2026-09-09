@@ -798,4 +798,7 @@ function showHeroView(){
   renderHero();
 }
 
+// Une sauvegarde d'avant le combat continu n'a pas de monstre : on en pose un.
+if(ensureMonster()){ saveHero(); }
+
 registerView("hero", showHeroView);
