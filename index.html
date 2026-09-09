@@ -948,10 +948,32 @@
   function newExercise(){
     return { id: nextId(), name:"", sets:[ newSet() ] };
   }
-  function newSet(){
-    return { reps:"", weight:"" };
+  function newSet(prev){
+    return prev ? { reps:prev.reps, weight:prev.weight } : { reps:"", weight:"" };
+  }
+  // La séance en cours survit à une fermeture d'onglet (fréquent sur téléphone).
+  function restoreBuilder(){
+    const b = state.workout.builder;
+    if(!b || !Array.isArray(b.exercises) || b.exercises.length === 0) return;
+    state.builder = {
+      name: typeof b.name === "string" ? b.name : "",
+      exercises: b.exercises.map(function(ex){
+        const sets = Array.isArray(ex.sets) && ex.sets.length
+          ? ex.sets.map(function(s){
+              return { reps: s.reps === undefined ? "" : s.reps, weight: s.weight === undefined ? "" : s.weight };
+            })
+          : [ newSet() ];
+        return { id: nextId(), name: ex.name || "", sets: sets };
+      })
+    };
+  }
+  let saveTimer = null;
+  function saveWorkoutSoon(){
+    clearTimeout(saveTimer);
+    saveTimer = setTimeout(saveWorkout, 400);
   }
   resetBuilder();
+  restoreBuilder();
 
   function allExerciseNames(){
     const set = new Set();
