@@ -364,48 +364,125 @@ document.getElementById("heroSprite").addEventListener("error", function(){
   document.getElementById("heroSpriteFallback").removeAttribute("hidden");
 });
 
-let animating = false;
-
-function runLiveTick(){
-  const result = resolveDungeonAttempt();
-  state.hero.dungeon.lastTick = Date.now();
-  pushLog(result);
-  saveHero();
-  animateFight(result);
+/* ================= EFFETS DE COMBAT ================= */
+function spawnFx(html, className, lifeMs){
+  const layer = document.getElementById("monsterFx");
+  if(!layer) return;
+  const el = document.createElement("span");
+  el.className = className;
+  el.innerHTML = html;
+  layer.appendChild(el);
+  setTimeout(function(){ el.remove(); }, lifeMs);
 }
 
-function animateFight(result){
-  animating = true;
-  playHeroAttack(); // 12 frames x 80 ms = 960 ms, terminé avant le résultat
-  const fill = document.getElementById("dungeonHpFill");
-  fill.style.transition = "none";
-  fill.style.width = "100%";
-  void fill.offsetWidth; // force le reflow pour repartir de 100 %
-  fill.style.transition = "width 1s ease";
-  fill.style.width = result.won ? "0%" : "45%";
-  document.getElementById("dungeonResult").textContent = "Assaut en cours…";
-
-  setTimeout(function(){
-    animating = false;
-    renderHero();
-    if(result.item){
-      showToast("🎁 " + itemDisplayName(result.item) + " (" + RARITY_LABELS[result.item.rarity] + ")");
-    }
-  }, 1100);
-}
-
-// Horloge unique : anime un combat quand l'onglet est visible, sinon laisse
-// le temps s'accumuler pour le rattrapage au retour.
-setInterval(function(){
-  if(state.activeView !== "hero" || document.hidden || animating) return;
-  const remaining = DUNGEON_TICK_SECONDS * 1000 - (Date.now() - state.hero.dungeon.lastTick);
-  if(remaining <= 0){
-    runLiveTick();
-  } else {
-    const el = document.getElementById("dungeonNext");
-    if(el){ el.textContent = "Prochain assaut dans " + Math.ceil(remaining / 1000) + " s"; }
+function showHitEffects(damage){
+  const figure = document.getElementById("monsterFigure");
+  if(figure){
+    figure.classList.remove("is-hit");
+    void figure.offsetWidth; // relance l'animation même sur des coups rapprochés
+    figure.classList.add("is-hit");
   }
-}, 1000);
+  // Décalage horizontal aléatoire pour que les nombres ne se superposent pas.
+  const offset = Math.round((Math.random() - 0.5) * 40);
+  spawnFx("-" + damage, "fx-damage", 900);
+  const last = document.querySelector("#monsterFx .fx-damage:last-child");
+  if(last){ last.style.setProperty("--fx-x", offset + "px"); }
+}
+
+function playDeathParticles(){
+  for(let i = 0; i < 8; i++){
+    const angle = (Math.PI * 2 * i) / 8;
+    spawnFx("", "fx-particle", 700);
+    const particle = document.querySelector("#monsterFx .fx-particle:last-child");
+    if(particle){
+      particle.style.setProperty("--px", Math.round(Math.cos(angle) * 46) + "px");
+      particle.style.setProperty("--py", Math.round(Math.sin(angle) * 46) + "px");
+    }
+  }
+}
+
+/* ================= BOUCLE DE COMBAT ================= */
+let heroSaveTimer = null;
+function saveHeroSoon(){
+  // Une écriture localStorage par seconde serait inutilement coûteuse.
+  if(heroSaveTimer) return;
+  heroSaveTimer = setTimeout(function(){
+    heroSaveTimer = null;
+    saveHero();
+  }, 3000);
+}
+
+function failBoss(){
+  const d = state.hero.dungeon;
+  d.bossFightActive = false;
+  d.bossTimeRemaining = 0;
+  d.stage = 1;
+  d.currentMonster = makeMonster(1);
+  pushLog({ text: "⏳ Boss non vaincu à temps — retour au palier 1", fail: true });
+  saveHero();
+  renderDungeon();
+  showToast("⏳ Temps écoulé ! Le boss t'échappe. Retour au palier 1, tes gains sont conservés.");
+}
+
+function performTick(){
+  const d = state.hero.dungeon;
+  ensureMonster();
+
+  // Le boss attend explicitement que le joueur lance le combat.
+  if(isBossStage() && !d.bossFightActive){
+    renderDungeon();
+    return;
+  }
+
+  if(isBossStage()){
+    d.bossTimeRemaining -= DUNGEON_TICK_SECONDS;
+    if(d.bossTimeRemaining <= 0){
+      failBoss();
+      return;
+    }
+  }
+
+  const damage = attackDamage();
+  d.currentMonster.hp -= damage;
+  playHeroAttack();
+  showHitEffects(damage);
+
+  if(d.currentMonster.hp <= 0){
+    const wasBoss = isBossStage();
+    playDeathParticles();
+    const reward = grantKillRewards(wasBoss);
+    pushLog(reward);
+    saveHero();
+    renderHero();
+    if(wasBoss){
+      showToast("🏅 Boss vaincu ! Run " + d.run + " · +" + reward.essence + " essence · +" + reward.gold + " or");
+    } else if(reward.item){
+      showToast("🎁 " + itemDisplayName(reward.item) + " (" + RARITY_LABELS[reward.item.rarity] + ")");
+    }
+    return;
+  }
+
+  saveHeroSoon();
+  renderDungeon();
+}
+
+// Une attaque par tick tant que l'onglet est visible ; sinon le temps
+// s'accumule et sera rattrapé au retour.
+setInterval(function(){
+  if(state.activeView !== "hero" || document.hidden) return;
+  state.hero.dungeon.lastTick = Date.now();
+  performTick();
+}, DUNGEON_TICK_SECONDS * 1000);
+
+document.getElementById("bossStartBtn").addEventListener("click", function(){
+  const d = state.hero.dungeon;
+  if(!isBossStage() || d.bossFightActive) return;
+  d.bossFightActive = true;
+  d.bossTimeRemaining = BOSS_TIME_LIMIT_SECONDS;
+  d.lastTick = Date.now();
+  saveHero();
+  renderDungeon();
+});
 
 /* ================= PROGRESSION DEPUIS LES SÉANCES ================= */
 // Appelé par workout.js à la finalisation d'une séance : seule source d'XP,
