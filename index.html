@@ -714,6 +714,13 @@
   function fromISO(s){ const p=s.split("-").map(Number); return new Date(p[0],p[1]-1,p[2]); }
   function addDaysISO(iso,n){ const d=fromISO(iso); d.setDate(d.getDate()+n); return toISO(d); }
   function formatLongFR(iso){ const d=fromISO(iso); return d.getDate()+" "+MONTHS_FR[d.getMonth()]; }
+  // Semaine du lundi au dimanche contenant la date donnée.
+  function getWeekRange(iso){
+    const day = fromISO(iso).getDay();          // 0 = dimanche
+    const toMonday = day === 0 ? -6 : 1 - day;
+    const start = addDaysISO(iso, toMonday);
+    return { start: start, end: addDaysISO(start, 6) };
+  }
   function formatShortFR(iso){ const d=fromISO(iso); return d.getDate()+" "+MONTHS_FR[d.getMonth()].slice(0,3); }
 
   /* ---------------- Chargement des données ---------------- */
