@@ -1400,7 +1400,9 @@
   function renderRecords(){
     const el = document.getElementById("recordsList");
     const prs = computePRs();
-    const names = Object.keys(prs).sort(function(a,b){ return prs[b].weight - prs[a].weight; });
+    // Tri alphabétique : classer par charge comparerait des exercices dont les
+    // poids saisis ne suivent pas la même convention (machine, halteres, barre).
+    const names = Object.keys(prs).sort(function(a,b){ return a.localeCompare(b,"fr"); });
     if(names.length === 0){
       el.innerHTML = '<p class="empty-state">Termine une séance avec des poids pour établir tes premiers records.</p>';
       return;
