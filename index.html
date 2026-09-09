@@ -661,12 +661,14 @@
     return {
       foodLog: EMBEDDED_FOOD_LOG.slice(), // Claude fait toujours autorité sur le journal
       waterLog: stored.waterLog || {},
+      weightLog: stored.weightLog || {},
       theme: stored.theme || null
     };
   }
   function saveNutri(){
     localStorage.setItem(NUTRI_KEY, JSON.stringify({
       waterLog: state.nutri.waterLog,
+      weightLog: state.nutri.weightLog,
       theme: state.nutri.theme
     }));
   }
