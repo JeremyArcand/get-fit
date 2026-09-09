@@ -1519,12 +1519,19 @@
       container.innerHTML = '<p class="empty-state">Aucune séance enregistrée. Construis ta première séance ci-dessus.</p>';
       return;
     }
+    const prs = computePRs();
+    const prSessions = {};
+    Object.keys(prs).forEach(function(name){ prSessions[prs[name].sessionId] = true; });
+
     let html = "";
     state.workout.sessions.forEach(function(session){
       const expanded = !!state.expandedSessions[session.id];
+      const badge = prSessions[session.id]
+        ? '<span class="pr-badge" title="Record personnel établi lors de cette séance">🏆</span>'
+        : '';
       html += '<div class="session-item">';
       html += '<div class="session-head" data-toggle-session="'+session.id+'">';
-      html += '<div class="session-head-info"><div class="session-name">'+escapeHtml(session.name)+'</div>';
+      html += '<div class="session-head-info"><div class="session-name">'+escapeHtml(session.name)+badge+'</div>';
       html += '<div class="session-sub">'+formatShortFR(session.date)+' · '+session.exercises.length+' exercice'+(session.exercises.length>1?'s':'')+' · '+sessionVolume(session).toLocaleString("fr-CA")+' lbs au total</div></div>';
       html += '<svg class="session-chevron'+(expanded?' open':'')+'" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>';
       html += '<button class="session-del" data-del-session="'+session.id+'"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><line x1="5" y1="5" x2="19" y2="19"/><line x1="19" y1="5" x2="5" y2="19"/></svg></button>';
