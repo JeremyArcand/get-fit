@@ -1272,8 +1272,8 @@
     const first = points[0];
     const diff = last.weight - first.weight;
     statsEl.innerHTML =
-      '<div class="pstat"><div class="pstat-val">'+maxEver+' kg</div><div class="pstat-label">Poids max</div></div>' +
-      '<div class="pstat"><div class="pstat-val">'+(diff>=0?'+':'')+diff+' kg</div><div class="pstat-label">Depuis le début</div></div>' +
+      '<div class="pstat"><div class="pstat-val">'+fmtWeight(maxEver)+' lbs</div><div class="pstat-label">Poids max</div></div>' +
+      '<div class="pstat"><div class="pstat-val">'+(diff>=0?'+':'−')+fmtWeight(Math.abs(diff))+' lbs</div><div class="pstat-label">Depuis le début</div></div>' +
       '<div class="pstat"><div class="pstat-val">'+formatShortFR(last.date)+'</div><div class="pstat-label">Dernière séance</div></div>';
   }
 
