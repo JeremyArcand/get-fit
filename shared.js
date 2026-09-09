@@ -172,10 +172,29 @@ function normalizeHero(stored){
     equipment: equipment,
     dungeon: {
       stage: Math.min(10, Math.max(1, num(dungeon.stage, 1, 1))),
+      run: num(dungeon.run, 1, 1),
       essence: num(dungeon.essence, 0, 0),
-      lastTick: num(dungeon.lastTick, 0, Date.now())
+      lastTick: num(dungeon.lastTick, 0, Date.now()),
+      // Un monstre incohérent (ancien format, PV négatifs, mauvais palier) est
+      // laissé à null : hero.js le régénère à PV pleins au chargement.
+      currentMonster: normalizeMonster(dungeon.currentMonster),
+      bossFightActive: dungeon.bossFightActive === true,
+      bossTimeRemaining: num(dungeon.bossTimeRemaining, 0, 0)
     }
   };
+}
+
+function normalizeMonster(m){
+  if(!m || typeof m !== "object") return null;
+  const maxHp = Number(m.maxHp);
+  const hp = Number(m.hp);
+  const stage = Number(m.stage);
+  const usable = typeof m.name === "string" && m.name &&
+    isFinite(maxHp) && maxHp > 0 &&
+    isFinite(hp) && hp > 0 && hp <= maxHp &&
+    isFinite(stage) && stage >= 1 && stage <= 10;
+  return usable ? { name: m.name, icon: typeof m.icon === "string" ? m.icon : "👾",
+                    stage: stage, maxHp: maxHp, hp: hp } : null;
 }
 function loadHero(){
   let stored = {};
