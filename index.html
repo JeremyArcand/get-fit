@@ -1076,10 +1076,15 @@
     try{
       const payload = JSON.parse(decodeURIComponent(escape(atob(raw))));
       state.nutri.waterLog = payload.waterLog || {};
+      state.nutri.weightLog = payload.weightLog || {};
       if(payload.theme){ state.nutri.theme = payload.theme; applyTheme(payload.theme); }
       if(payload.workouts){
         if(payload.unit !== "lbs"){ convertSessionsToLbs(payload.workouts); }
         state.workout.sessions = payload.workouts;
+      }
+      if(payload.templates){
+        if(payload.unit !== "lbs"){ convertSessionsToLbs(payload.templates); }
+        state.workout.templates = payload.templates;
       }
       saveNutri();
       saveWorkout();
