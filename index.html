@@ -664,14 +664,6 @@
   });
   initTheme();
 
-  /* ================= HORLOGE ================= */
-  function updateClock(){
-    const now = new Date();
-    document.getElementById("clock").textContent = pad(now.getHours())+":"+pad(now.getMinutes());
-  }
-  updateClock();
-  setInterval(updateClock, 10000);
-
   /* ================= ROLLOVER AUTOMATIQUE DE JOURNÉE ================= */
   let lastKnownToday = todayISO();
   setInterval(function(){
