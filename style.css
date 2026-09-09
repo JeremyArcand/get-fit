@@ -406,6 +406,80 @@ select#exerciseSelect{margin-bottom:14px;font-weight:600;}
 .pr-badge{margin-left:6px;}
 .record-trophy{flex-shrink:0;}
 
+/* ===================== MON HÉROS ===================== */
+.hero-head{display:flex;align-items:center;gap:10px;margin-bottom:14px;}
+.hero-name-input{
+  flex:1;min-width:0;
+  font-size:17px;font-weight:700;padding:10px 12px;
+}
+.hero-level{
+  flex-shrink:0;background:var(--accent-1);color:#fff;
+  padding:6px 12px;border-radius:999px;font-size:12px;font-weight:700;
+}
+.hero-bar-label{
+  display:flex;align-items:baseline;justify-content:space-between;gap:10px;
+  margin-bottom:7px;font-size:13px;color:var(--text-secondary);
+  font-variant-numeric:tabular-nums;
+}
+.hero-stats{display:flex;gap:10px;margin-top:16px;}
+.hero-stat{
+  flex:1;background:var(--bg-elevated-2);border-radius:14px;
+  padding:11px 6px;text-align:center;
+}
+.hero-stat-val{
+  display:block;font-size:19px;font-weight:700;color:var(--text);
+  font-variant-numeric:tabular-nums;
+}
+.hero-stat-bonus{font-size:12px;font-weight:700;color:var(--carb);}
+.hero-stat-name{
+  display:block;margin-top:3px;font-size:10px;font-weight:600;
+  color:var(--text-tertiary);text-transform:uppercase;letter-spacing:0.03em;
+}
+.hero-gold{
+  margin-top:14px;text-align:center;
+  font-size:15px;font-weight:700;color:var(--text);
+}
+
+.monster-name{font-size:14px;font-weight:700;color:var(--text);}
+.hp-fill{
+  height:100%;border-radius:6px;
+  background:linear-gradient(90deg,var(--danger),#F59E0B);
+  transition:width 0.4s ease;
+}
+.monster-reward{margin:9px 0 14px;font-size:12px;color:var(--text-secondary);}
+.hero-attack{width:100%;padding:13px;font-size:15px;}
+.hero-attack:disabled{opacity:0.45;cursor:not-allowed;}
+.attack-hint{margin:9px 0 0;text-align:center;font-size:12px;color:var(--text-tertiary);}
+
+.chest-row{display:flex;gap:10px;}
+.chest-btn{
+  flex:1;display:flex;flex-direction:column;align-items:center;gap:3px;
+  padding:14px 8px;
+}
+.chest-btn:disabled{opacity:0.45;cursor:not-allowed;}
+.chest-icon{font-size:22px;}
+.chest-name{font-size:13px;font-weight:700;color:var(--text);}
+.chest-price{font-size:12px;font-weight:600;color:var(--text-secondary);}
+
+.weapon-item{
+  display:flex;align-items:center;gap:10px;
+  padding:11px 0;border-top:1px solid var(--border);
+}
+.weapon-item:first-child{border-top:none;}
+.weapon-info{flex:1;min-width:0;}
+.weapon-name{font-size:14px;font-weight:600;color:var(--text);}
+.weapon-rarity{
+  font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:0.03em;
+  padding:2px 7px;border-radius:999px;
+}
+.weapon-rarity.is-common{background:var(--bg-elevated-2);color:var(--text-tertiary);}
+.weapon-rarity.is-rare{background:rgba(139,92,246,0.16);color:#8B5CF6;}
+.weapon-bonus{font-size:12px;color:var(--text-secondary);margin-top:2px;}
+.weapon-equip{flex-shrink:0;padding:8px 14px;font-size:13px;}
+.weapon-equipped{
+  flex-shrink:0;font-size:12px;font-weight:700;color:var(--carb);
+}
+
 /* Notification passagère */
 .toast{
   position:fixed;left:50%;bottom:calc(22px + env(safe-area-inset-bottom,0px));
