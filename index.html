@@ -617,13 +617,33 @@
     }));
   }
 
+  const LBS_PER_KG = 2.20462;
+
+  // Les poids étaient saisis en kg avant la bascule en lbs : on convertit une
+  // seule fois les données existantes pour que l'historique reste comparable.
+  function convertSessionsToLbs(sessions){
+    sessions.forEach(function(s){
+      (s.exercises||[]).forEach(function(ex){
+        (ex.sets||[]).forEach(function(st){
+          st.weight = Math.round((Number(st.weight)||0) * LBS_PER_KG * 2) / 2;
+        });
+      });
+    });
+  }
+
   function loadWorkout(){
     let stored = {};
     try { stored = JSON.parse(localStorage.getItem(WORKOUT_KEY)) || {}; } catch(e){ stored = {}; }
-    return { sessions: stored.sessions || [] };
+    const sessions = stored.sessions || [];
+    if(stored.unit !== "lbs"){ convertSessionsToLbs(sessions); }
+    return { sessions: sessions, builder: stored.builder || null };
   }
   function saveWorkout(){
-    localStorage.setItem(WORKOUT_KEY, JSON.stringify({ sessions: state.workout.sessions }));
+    localStorage.setItem(WORKOUT_KEY, JSON.stringify({
+      sessions: state.workout.sessions,
+      builder: state.builder,
+      unit: "lbs"
+    }));
   }
 
   const state = {
