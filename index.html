@@ -776,9 +776,10 @@
     };
   }
   function normalizeGoal(v){
+    if(v === "" || v === null || v === undefined) return 4;
     const n = Math.round(Number(v));
-    if(!isFinite(n) || n < 1) return n === 0 ? 1 : 4;
-    return Math.min(14, n);
+    if(!isFinite(n)) return 4;
+    return Math.min(14, Math.max(1, n));
   }
   function saveWorkout(){
     localStorage.setItem(WORKOUT_KEY, JSON.stringify({
