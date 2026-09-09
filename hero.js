@@ -247,6 +247,62 @@ function catchUpDungeon(){
     (summary.items > 1 ? "s" : ""));
 }
 
+/* ================= SPRITE DU HÉROS ================= */
+// Flipbook : on remplace la source de l'image frame par frame, une seule
+// passe, puis retour à la pose au repos.
+let attackFrameTimer = null;
+let spriteBroken = false;
+let framesPreloaded = false;
+
+function heroAttackFrameSrc(index){
+  return "assets/hero/attack/hero-attack-" + String(index).padStart(2, "0") + ".png";
+}
+
+function preloadAttackFrames(){
+  // Chargées à la première ouverture de l'onglet seulement : inutile de
+  // télécharger les frames pour quelqu'un qui n'ouvre jamais Mon Héros.
+  if(framesPreloaded || spriteBroken) return;
+  framesPreloaded = true;
+  for(let i = 1; i <= HERO_ATTACK_FRAME_COUNT; i++){
+    const img = new Image();
+    img.src = heroAttackFrameSrc(i);
+  }
+}
+
+function stopHeroAttack(){
+  if(attackFrameTimer){
+    clearInterval(attackFrameTimer);
+    attackFrameTimer = null;
+  }
+}
+
+function playHeroAttack(){
+  const img = document.getElementById("heroSprite");
+  if(!img || spriteBroken) return;
+  stopHeroAttack();
+
+  let frame = 1;
+  img.src = heroAttackFrameSrc(frame);
+  attackFrameTimer = setInterval(function(){
+    frame += 1;
+    if(frame > HERO_ATTACK_FRAME_COUNT){
+      stopHeroAttack();
+      img.src = HERO_IDLE_SRC;
+      return;
+    }
+    img.src = heroAttackFrameSrc(frame);
+  }, HERO_ATTACK_FRAME_MS);
+}
+
+// Chemin cassé ou image absente : on retombe sur la silhouette SVG plutôt
+// que d'afficher une icône brisée.
+document.getElementById("heroSprite").addEventListener("error", function(){
+  spriteBroken = true;
+  stopHeroAttack();
+  this.hidden = true;
+  document.getElementById("heroSpriteFallback").hidden = false;
+});
+
 let animating = false;
 
 function runLiveTick(){
