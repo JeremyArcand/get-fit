@@ -849,9 +849,95 @@
     document.getElementById("waterMinus").disabled = !canEditWater;
     document.getElementById("waterPlus").disabled = !canEditWater;
 
+    renderWeight(iso);
     renderHistoryBars();
     renderDiary(iso, isToday);
   }
+
+  /* ================= POIDS CORPOREL ================= */
+  function weightEntries(){
+    return Object.keys(state.nutri.weightLog)
+      .sort()
+      .map(function(date){ return { date:date, value:Number(state.nutri.weightLog[date]) }; })
+      .filter(function(e){ return e.value > 0; });
+  }
+
+  function renderWeight(iso){
+    const input = document.getElementById("weightInput");
+    const stored = state.nutri.weightLog[iso];
+    if(document.activeElement !== input){
+      input.value = stored === undefined ? "" : stored;
+    }
+    input.placeholder = iso === todayISO() ? "Poids en lb" : "Poids du " + formatShortFR(iso) + " (lb)";
+
+    const entries = weightEntries();
+    const latestEl = document.getElementById("weightLatest");
+    if(entries.length === 0){
+      latestEl.textContent = "—";
+      document.getElementById("weightChart").innerHTML =
+        '<p class="empty-state">Entre ton poids pour suivre ton évolution.</p>';
+      return;
+    }
+    const last = entries[entries.length-1];
+    const diff = last.value - entries[0].value;
+    latestEl.innerHTML = fmtWeight(last.value) + " lb" +
+      (entries.length > 1
+        ? ' <span class="weight-delta">(' + (diff >= 0 ? "+" : "−") + fmtWeight(Math.abs(diff)) + ')</span>'
+        : "");
+
+    renderWeightChart(entries.slice(-14));
+  }
+
+  function renderWeightChart(points){
+    const el = document.getElementById("weightChart");
+    if(points.length < 2){
+      el.innerHTML = '<p class="empty-state">Encore une entrée et la courbe apparaîtra.</p>';
+      return;
+    }
+    const w = 320, h = 110, padX = 14, padY = 14;
+    const values = points.map(function(p){ return p.value; });
+    let min = Math.min.apply(null, values), max = Math.max.apply(null, values);
+    if(min === max){ min -= 2; max += 2; }
+    const span = max - min;
+    min = min - span*0.18;
+    max = max + span*0.18;
+
+    function xAt(i){ return padX + (i/(points.length-1)) * (w-padX*2); }
+    function yAt(v){ return h - padY - ((v-min)/(max-min)) * (h-padY*2); }
+
+    let path = "", dots = "";
+    points.forEach(function(p,i){
+      const x = xAt(i), y = yAt(p.value);
+      path += (i===0 ? "M" : "L") + x.toFixed(1) + "," + y.toFixed(1) + " ";
+      dots += '<circle cx="'+x.toFixed(1)+'" cy="'+y.toFixed(1)+'" r="3" fill="var(--accent-2)" stroke="var(--bg-elevated)" stroke-width="1.5"/>';
+    });
+    const areaPath = path + "L"+xAt(points.length-1).toFixed(1)+","+(h-padY)+" L"+xAt(0).toFixed(1)+","+(h-padY)+" Z";
+
+    el.innerHTML =
+      '<svg viewBox="0 0 '+w+' '+h+'" width="100%" height="'+h+'" preserveAspectRatio="none" style="overflow:visible">' +
+      '<defs><linearGradient id="weightGrad" x1="0" y1="0" x2="0" y2="1">' +
+      '<stop offset="0%" stop-color="var(--accent-2)" stop-opacity="0.28"/>' +
+      '<stop offset="100%" stop-color="var(--accent-2)" stop-opacity="0"/></linearGradient></defs>' +
+      '<path d="'+areaPath+'" fill="url(#weightGrad)" stroke="none"/>' +
+      '<path d="'+path+'" fill="none" stroke="var(--accent-2)" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/>' +
+      dots +
+      '</svg>';
+  }
+
+  document.getElementById("weightSaveBtn").addEventListener("click", function(){
+    const input = document.getElementById("weightInput");
+    const raw = input.value.trim();
+    if(raw === ""){
+      delete state.nutri.weightLog[state.viewDate];
+    } else {
+      const value = Number(raw);
+      if(!(value > 0)){ showToast("Entre un poids valide."); return; }
+      state.nutri.weightLog[state.viewDate] = Math.round(value*10)/10;
+    }
+    saveNutri();
+    input.blur();
+    renderWeight(state.viewDate);
+  });
 
   function renderMacro(id, val, target, unit){
     const el = document.getElementById(id);
