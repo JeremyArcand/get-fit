@@ -440,16 +440,86 @@ select#exerciseSelect{margin-bottom:14px;font-weight:600;}
   font-size:15px;font-weight:700;color:var(--text);
 }
 
-.monster-name{font-size:14px;font-weight:700;color:var(--text);}
+.hero-resources{display:flex;gap:8px;margin-top:14px;}
+.hero-res{
+  flex:1;background:var(--bg-elevated-2);border-radius:12px;
+  padding:9px 4px;text-align:center;min-width:0;
+}
+.hero-res-val{
+  display:block;font-size:14px;font-weight:700;color:var(--text);
+  font-variant-numeric:tabular-nums;white-space:nowrap;
+}
+.hero-res-name{
+  display:block;margin-top:2px;font-size:9px;font-weight:600;
+  color:var(--text-tertiary);text-transform:uppercase;letter-spacing:0.03em;
+}
+
+.card-sub{font-size:12px;font-weight:600;color:var(--text-tertiary);}
+
+/* Donjon automatique */
+.dungeon-stage{font-size:14px;font-weight:700;color:var(--text);}
 .hp-fill{
   height:100%;border-radius:6px;
   background:linear-gradient(90deg,var(--danger),#F59E0B);
   transition:width 0.4s ease;
 }
-.monster-reward{margin:9px 0 14px;font-size:12px;color:var(--text-secondary);}
-.hero-attack{width:100%;padding:13px;font-size:15px;}
-.hero-attack:disabled{opacity:0.45;cursor:not-allowed;}
-.attack-hint{margin:9px 0 0;text-align:center;font-size:12px;color:var(--text-tertiary);}
+.dungeon-result{margin:10px 0 4px;font-size:13px;font-weight:600;color:var(--text);}
+.dungeon-next{margin:0;font-size:12px;color:var(--text-tertiary);}
+.dungeon-log{margin-top:12px;}
+.dungeon-log-line{
+  font-size:11px;color:var(--text-secondary);
+  padding:4px 0;border-top:1px solid var(--border);
+}
+.dungeon-log-line:first-child{border-top:none;}
+.dungeon-log-line.is-fail{color:var(--text-tertiary);}
+
+/* Améliorations à l'essence */
+.upgrade-row{display:flex;gap:8px;}
+.upgrade-btn{
+  flex:1;display:flex;flex-direction:column;align-items:center;gap:2px;
+  padding:11px 4px;min-width:0;
+}
+.upgrade-btn:disabled{opacity:0.45;cursor:not-allowed;}
+.upgrade-stat{font-size:12px;font-weight:700;color:var(--text);}
+.upgrade-gain{font-size:11px;font-weight:600;color:var(--carb);}
+.upgrade-cost{font-size:12px;font-weight:700;color:var(--text-secondary);white-space:nowrap;}
+
+/* Trésor / forge */
+.legendary-btn{width:100%;margin-bottom:12px;}
+.legendary-btn:not(:disabled) .chest-name{color:#8B5CF6;}
+.forge-row{display:flex;gap:9px;}
+.forge-row select{flex:1;min-width:0;}
+.forge-btn{flex:0 0 auto;padding:11px 14px;white-space:nowrap;}
+.forge-btn:disabled{opacity:0.45;cursor:not-allowed;}
+.forge-hint{margin:9px 0 0;font-size:11px;color:var(--text-tertiary);}
+
+/* Grille des 6 emplacements */
+.equipment-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;}
+.equip-slot{
+  display:flex;flex-direction:column;align-items:center;gap:2px;
+  background:var(--bg-elevated-2);border:1px solid var(--border);border-radius:12px;
+  padding:10px 5px;cursor:pointer;font-family:inherit;min-width:0;
+  transition:border-color 0.2s ease;
+}
+.equip-slot.is-filled{border-color:var(--accent-2);}
+.equip-slot-icon{font-size:17px;}
+.equip-slot-label{
+  font-size:9px;font-weight:700;color:var(--text-tertiary);
+  text-transform:uppercase;letter-spacing:0.03em;
+}
+.equip-slot-item{
+  font-size:11px;font-weight:600;color:var(--text-secondary);
+  max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
+}
+.equip-slot.is-filled .equip-slot-item{color:var(--text);}
+
+/* Inventaire groupé par emplacement */
+.inv-group{margin-bottom:14px;}
+.inv-group:last-child{margin-bottom:0;}
+.inv-group-title{
+  font-size:11px;font-weight:700;color:var(--text-tertiary);
+  text-transform:uppercase;letter-spacing:0.03em;margin-bottom:4px;
+}
 
 .chest-row{display:flex;gap:10px;}
 .chest-btn{
