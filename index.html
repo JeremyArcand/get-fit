@@ -333,6 +333,35 @@
   .pstat-val{font-size:17px;font-weight:700;color:var(--text);font-variant-numeric:tabular-nums;}
   .pstat-label{font-size:10px;color:var(--text-tertiary);font-weight:600;margin-top:2px;text-transform:uppercase;letter-spacing:0.02em;}
 
+  /* Objectif hebdomadaire + streak */
+  .goal-body{display:flex;align-items:center;gap:18px;}
+  .goal-ring-wrap{position:relative;width:104px;height:104px;flex-shrink:0;}
+  .goal-ring{width:100%;height:100%;transform:rotate(-90deg);}
+  .gring-bg{fill:none;stroke:var(--ring-bg-light);stroke-width:10;}
+  .gring-fg{
+    fill:none;stroke:url(#goalGradient);stroke-width:10;stroke-linecap:round;
+    transition:stroke-dashoffset 0.6s cubic-bezier(.4,0,.2,1);
+  }
+  .goal-ring-center{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;}
+  .goal-count{font-size:28px;font-weight:700;color:var(--text);line-height:1;font-variant-numeric:tabular-nums;letter-spacing:-0.02em;}
+  .goal-of{font-size:12px;color:var(--text-secondary);margin-top:4px;}
+  .goal-side{flex:1;min-width:0;}
+  .goal-streak{font-size:16px;font-weight:700;color:var(--text);}
+  .goal-sub{font-size:13px;color:var(--text-secondary);margin-top:3px;}
+  .goal-edit{
+    display:flex;align-items:center;gap:9px;margin-top:12px;
+    font-size:12px;font-weight:600;color:var(--text-tertiary);
+  }
+  .goal-edit input{width:66px;flex:0 0 auto;padding:7px 6px;text-align:center;}
+
+  /* Bâtisseur : nom + date de séance */
+  .builder-meta{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:14px;}
+  .builder-meta .session-name-input{flex:1 1 170px;margin-bottom:0;}
+  .builder-meta .session-date-input{
+    flex:0 1 152px;margin-bottom:0;
+    font-size:15px;font-weight:600;padding:11px 12px;
+  }
+
   /* Poids corporel */
   .weight-row{display:flex;gap:10px;margin-bottom:14px;}
   .weight-row input{flex:1;min-width:0;}
