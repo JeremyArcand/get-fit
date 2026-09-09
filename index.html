@@ -896,10 +896,11 @@
 
   function buildSaveCode(){
     const payload = {
-      v:1,
+      v:2,
       waterLog: state.nutri.waterLog,
       theme: state.nutri.theme,
-      workouts: state.workout.sessions
+      workouts: state.workout.sessions,
+      unit: "lbs"
     };
     return btoa(unescape(encodeURIComponent(JSON.stringify(payload))));
   }
