@@ -171,16 +171,45 @@ function addItem(item){
   return item;
 }
 
-/* ================= DONJON AUTOMATIQUE ================= */
+/* ================= DONJON — COMBAT CONTINU ================= */
+// Les PV du monstre servent d'échelle de difficulté : plus le palier est
+// haut, plus il faut de secondes d'attaque pour l'abattre.
 function stageDifficulty(stage){
   const base = 15 * Math.pow(1.35, stage);
   return stage === DUNGEON_MAX_STAGE ? base * 1.5 : base;
 }
 
-function winProbability(stage){
-  const power = totalPower();
-  const raw = power / (power + stageDifficulty(stage));
-  return Math.max(0.05, Math.min(0.95, raw));
+function monsterMaxHp(stage){
+  return Math.round(stageDifficulty(stage));
+}
+
+function makeMonster(stage){
+  const entry = MONSTER_ROSTER[(stage - 1) % MONSTER_ROSTER.length];
+  const maxHp = monsterMaxHp(stage);
+  return { name: entry.name, icon: entry.icon, stage: stage, maxHp: maxHp, hp: maxHp };
+}
+
+// Dégâts fixes par attaque. La force totale (équipement compris) compte pour
+// moitié, et l'arme ajoute son bonus de force en entier.
+function attackDamage(){
+  const weapon = findItem(state.hero.equipment.weapon);
+  const weaponForce = weapon && weapon.bonus.force ? weapon.bonus.force : 0;
+  return 3 + Math.floor(totalStats().force / 2) + weaponForce;
+}
+
+function isBossStage(){
+  return state.hero.dungeon.stage === DUNGEON_MAX_STAGE;
+}
+
+// Remet un monstre cohérent en place si la sauvegarde n'en avait pas.
+function ensureMonster(){
+  const d = state.hero.dungeon;
+  const m = d.currentMonster;
+  if(!m || m.stage !== d.stage || !(m.maxHp > 0) || !(m.hp > 0)){
+    d.currentMonster = makeMonster(d.stage);
+    return true;
+  }
+  return false;
 }
 
 function rollDropRarity(stage){
@@ -189,77 +218,92 @@ function rollDropRarity(stage){
   return Math.random() < rareChance ? "rare" : "common";
 }
 
-// Résout une tentative et applique ses effets. Retourne le détail du combat.
-function resolveDungeonAttempt(){
-  const hero = state.hero;
-  const stage = hero.dungeon.stage;
-  const isBoss = stage === DUNGEON_MAX_STAGE;
-  const won = Math.random() < winProbability(stage);
-  const result = { stage: stage, isBoss: isBoss, won: won, essence: 0, gold: 0, item: null };
+// Récompenses d'un monstre abattu, puis passage au monstre suivant.
+// Utilisé en direct comme en rattrapage hors-ligne.
+function grantKillRewards(isBoss){
+  const d = state.hero.dungeon;
+  const stage = d.stage;
+  const multiplier = isBoss ? 3 : 1;
+  const essence = (2 + stage) * multiplier;
+  const gold = (3 + stage * 2) * multiplier;
 
-  if(won){
-    const multiplier = isBoss ? 3 : 1;
-    result.essence = (2 + stage) * multiplier;
-    result.gold = (3 + stage * 2) * multiplier;
-    hero.dungeon.essence += result.essence;   // banqué immédiatement
-    hero.gold += result.gold;
+  d.essence += essence;
+  state.hero.gold += gold;
 
-    const dropChance = isBoss ? 1 : (0.10 + stage * 0.02);
-    if(Math.random() < dropChance){
-      result.item = addItem(createItem(isBoss ? "rare" : rollDropRarity(stage)));
-    }
-    hero.dungeon.stage = isBoss ? 1 : stage + 1;
-  } else {
-    hero.dungeon.stage = 1;
+  let item = null;
+  const dropChance = isBoss ? 1 : (0.10 + stage * 0.02);
+  if(Math.random() < dropChance){
+    item = addItem(createItem(isBoss ? "rare" : rollDropRarity(stage)));
   }
-  return result;
+
+  if(isBoss){
+    d.run += 1;
+    d.stage = 1;
+    d.bossFightActive = false;
+    d.bossTimeRemaining = 0;
+  } else {
+    d.stage = stage + 1;
+    if(d.stage === DUNGEON_MAX_STAGE){
+      // Le boss ne démarre jamais tout seul : il attend le clic du joueur.
+      d.bossFightActive = false;
+      d.bossTimeRemaining = BOSS_TIME_LIMIT_SECONDS;
+    }
+  }
+  d.currentMonster = makeMonster(d.stage);
+  return { stage: stage, isBoss: isBoss, essence: essence, gold: gold, item: item };
 }
 
 let fightLog = [];
 let lastResult = null;
 
-function pushLog(result){
-  fightLog.unshift(result);
+function pushLog(entry){
+  fightLog.unshift(entry);
   fightLog = fightLog.slice(0, 5);
-  lastResult = result;
+  lastResult = entry;
 }
 
-function describeResult(result){
-  if(!result) return "Le donjon t'attend…";
-  const where = result.isBoss ? "Boss" : "Palier " + result.stage;
-  if(!result.won){
-    return "💀 " + where + " — échec, retour au palier 1";
-  }
-  return "✅ " + where + " franchi · +" + result.essence + " essence · +" + result.gold + " or" +
-    (result.item ? " · 🎁 " + itemDisplayName(result.item) : "");
+function describeResult(entry){
+  if(!entry) return "Le donjon t'attend…";
+  if(entry.text) return entry.text;
+  const where = entry.isBoss ? "Boss" : "Palier " + entry.stage;
+  return "✅ " + where + " vaincu · +" + entry.essence + " essence · +" + entry.gold + " or" +
+    (entry.item ? " · 🎁 " + itemDisplayName(entry.item) : "");
 }
 
-// Rattrapage du temps écoulé (chargement de page ou retour sur l'onglet).
+// Rattrapage du temps écoulé. Ne résout jamais un combat de boss : le joueur
+// doit être présent pour voir le minuteur tourner.
 function catchUpDungeon(){
-  const dungeon = state.hero.dungeon;
-  const elapsed = Date.now() - dungeon.lastTick;
-  const ticks = Math.floor(elapsed / (DUNGEON_TICK_SECONDS * 1000));
-  if(ticks <= 0) return;
+  const d = state.hero.dungeon;
+  const elapsedSeconds = Math.floor((Date.now() - d.lastTick) / 1000);
+  d.lastTick = Date.now();
+  if(elapsedSeconds <= 0) return;
 
-  const attempts = Math.min(ticks, MAX_OFFLINE_TICKS);
-  const summary = { cleared: 0, essence: 0, gold: 0, items: 0 };
-  for(let i = 0; i < attempts; i++){
-    const result = resolveDungeonAttempt();
-    pushLog(result);
-    if(result.won){
+  const seconds = Math.min(elapsedSeconds, MAX_OFFLINE_SECONDS);
+  const attacks = Math.floor(seconds / DUNGEON_TICK_SECONDS);
+  if(attacks <= 0 || isBossStage()) { saveHero(); return; }
+
+  const summary = { cleared: 0, essence: 0, gold: 0, items: 0, reachedBoss: false };
+  const damage = attackDamage();
+
+  for(let i = 0; i < attacks; i++){
+    if(isBossStage()){ summary.reachedBoss = true; break; }
+    d.currentMonster.hp -= damage;
+    if(d.currentMonster.hp <= 0){
+      const reward = grantKillRewards(false);
+      pushLog(reward);
       summary.cleared += 1;
-      summary.essence += result.essence;
-      summary.gold += result.gold;
-      if(result.item){ summary.items += 1; }
+      summary.essence += reward.essence;
+      summary.gold += reward.gold;
+      if(reward.item){ summary.items += 1; }
     }
   }
-  dungeon.lastTick = Date.now();
   saveHero();
 
+  if(summary.cleared === 0 && !summary.reachedBoss) return;
   showToast("Pendant ton absence : " + summary.cleared + " palier" + (summary.cleared > 1 ? "s" : "") +
     " franchi" + (summary.cleared > 1 ? "s" : "") + ", +" + summary.essence + " essence, +" +
     summary.gold + " or, " + summary.items + " objet" + (summary.items > 1 ? "s" : "") + " trouvé" +
-    (summary.items > 1 ? "s" : ""));
+    (summary.items > 1 ? "s" : "") + (summary.reachedBoss ? " · le boss t'attend !" : ""));
 }
 
 /* ================= SPRITE DU HÉROS ================= */
