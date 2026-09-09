@@ -1,95 +1,301 @@
 "use strict";
 
 /* ================================================================
-   ONGLET MON HÉROS — progression RPG alimentée uniquement par les
-   séances réellement loggées : aucune XP, aucun or et aucune attaque
-   ne peut être gagné en dehors de workout.js.
+   ONGLET MON HÉROS — Phase 2.
+
+   Deux économies distinctes :
+   - Essence et or : farmables via le donjon automatique, qui tourne
+     tout seul avec le temps (et rattrape le temps hors-ligne).
+   - Gemmes : uniquement via une montée de niveau, donc uniquement
+     via une vraie séance loggée dans workout.js.
    ================================================================ */
 
-const MONSTER_NAMES = [
-  "Gobelin poussif", "Loup des landes", "Golem de pierre", "Spectre affamé",
-  "Ogre bedonnant", "Basilic endormi", "Chevalier déchu", "Hydre à deux têtes",
-  "Démon de la fonte", "Dragon d'acier"
-];
+const DUNGEON_TICK_SECONDS = 20;
+const MAX_OFFLINE_TICKS = 100;
+const DUNGEON_MAX_STAGE = 10;
 
-// Butin commun : bonus modestes, une ou deux stats.
-const LOOT_COMMON = [
-  { name: "Dague rouillée",     bonus: { force: 1 } },
-  { name: "Gourdin de chêne",   bonus: { force: 2 } },
-  { name: "Bâton du marcheur",  bonus: { endurance: 2 } },
-  { name: "Sandales lestées",   bonus: { vitesse: 2 } },
-  { name: "Hachette de camp",   bonus: { force: 2, vitesse: 1 } },
-  { name: "Bouclier de bois",   bonus: { endurance: 3 } }
-];
-
-// Butin rare : bonus plus forts, parfois sur les trois stats.
-const LOOT_RARE = [
-  { name: "Lame de l'aurore",     bonus: { force: 5, vitesse: 3 } },
-  { name: "Marteau du colosse",   bonus: { force: 6, endurance: 3 } },
-  { name: "Égide runique",        bonus: { endurance: 6, force: 3 } },
-  { name: "Griffes du vent",      bonus: { vitesse: 6, force: 3 } },
-  { name: "Relique du champion",  bonus: { force: 4, endurance: 4, vitesse: 4 } }
-];
-
+const LEGENDARY_CHEST_GEMS = 5;
+const FORGE_GEMS = 3;
 const CHEST_COMMON_PRICE = 25;
 const CHEST_RARE_PRICE = 60;
 
+const SLOT_LABELS = {
+  weapon: "Arme",
+  helmet: "Casque",
+  chestplate: "Plastron",
+  leggings: "Jambières",
+  ring: "Anneau",
+  necklace: "Collier"
+};
+const SLOT_ICONS = {
+  weapon: "🗡️", helmet: "🪖", chestplate: "🛡️",
+  leggings: "👖", ring: "💍", necklace: "📿"
+};
+const RARITY_LABELS = { common: "commune", rare: "rare", legendary: "légendaire" };
+
+/* ================= TABLES DE BUTIN ================= */
+const LOOT_COMMON = [
+  { name: "Dague rouillée",       slot: "weapon",     bonus: { force: 2 } },
+  { name: "Gourdin de chêne",     slot: "weapon",     bonus: { force: 3 } },
+  { name: "Casque de cuir",       slot: "helmet",     bonus: { endurance: 2 } },
+  { name: "Plastron matelassé",   slot: "chestplate", bonus: { endurance: 3 } },
+  { name: "Jambières de toile",   slot: "leggings",   bonus: { vitesse: 2 } },
+  { name: "Anneau de cuivre",     slot: "ring",       bonus: { force: 1, vitesse: 1 } },
+  { name: "Amulette d'os",        slot: "necklace",   bonus: { endurance: 1, vitesse: 2 } }
+];
+
+const LOOT_RARE = [
+  { name: "Lame de l'aurore",     slot: "weapon",     bonus: { force: 5, vitesse: 3 } },
+  { name: "Marteau du colosse",   slot: "weapon",     bonus: { force: 6, endurance: 3 } },
+  { name: "Heaume runique",       slot: "helmet",     bonus: { endurance: 5, force: 3 } },
+  { name: "Égide du rempart",     slot: "chestplate", bonus: { endurance: 6, vitesse: 3 } },
+  { name: "Grèves du vent",       slot: "leggings",   bonus: { vitesse: 6, force: 3 } },
+  { name: "Sceau du duelliste",   slot: "ring",       bonus: { force: 4, vitesse: 4 } },
+  { name: "Collier des marées",   slot: "necklace",   bonus: { endurance: 4, vitesse: 4 } }
+];
+
+// Rareté légendaire : accessible uniquement par le coffre à gemmes.
+const LOOT_LEGENDARY = [
+  { name: "Ruine des titans",       slot: "weapon",     bonus: { force: 10, endurance: 6 } },
+  { name: "Couronne du roi déchu",  slot: "helmet",     bonus: { endurance: 8, force: 7, vitesse: 6 } },
+  { name: "Carapace du dragon",     slot: "chestplate", bonus: { endurance: 10, force: 7 } },
+  { name: "Foulées du mirage",      slot: "leggings",   bonus: { vitesse: 10, endurance: 6 } },
+  { name: "Anneau du serment",      slot: "ring",       bonus: { force: 8, endurance: 8, vitesse: 8 } },
+  { name: "Cœur d'étoile",          slot: "necklace",   bonus: { force: 9, vitesse: 9 } }
+];
+
+const LOOT_TABLES = { common: LOOT_COMMON, rare: LOOT_RARE, legendary: LOOT_LEGENDARY };
+
+/* ================= CALCULS DE BASE ================= */
 function xpForNextLevel(level){
   return 50 * level;
 }
 
-function makeMonster(index){
-  const tier = Math.floor(index / MONSTER_NAMES.length);
-  const base = MONSTER_NAMES[index % MONSTER_NAMES.length];
-  const maxHp = Math.round(40 * Math.pow(1.2, index));
+function fmtStat(v){
+  return String(Math.round(v * 10) / 10).replace(".", ",");
+}
+
+function equippedItems(){
+  const hero = state.hero;
+  return EQUIPMENT_SLOTS
+    .map(function(slot){ return findItem(hero.equipment[slot]); })
+    .filter(Boolean);
+}
+
+function findItem(id){
+  if(!id) return null;
+  return state.hero.inventory.find(function(item){ return item.id === id; }) || null;
+}
+
+// Bonus permanents achetés avec l'essence (+0,5 par achat).
+function essenceBonus(stat){
+  return state.hero.essenceUpgrades[stat] * 0.5;
+}
+
+function baseStats(){
+  const s = state.hero.stats;
   return {
-    name: tier > 0 ? base + " " + "★".repeat(tier) : base,
-    maxHp: maxHp,
-    hp: maxHp,
-    goldReward: 8 + index * 2
+    force: s.force + essenceBonus("force"),
+    endurance: s.endurance + essenceBonus("endurance"),
+    vitesse: s.vitesse + essenceBonus("vitesse")
   };
 }
 
-// Le monstre courant peut manquer (nouvel utilisateur ou sauvegarde ancienne).
-if(!state.hero.currentMonster){
-  state.hero.currentMonster = makeMonster(state.hero.monsterIndex);
-  saveHero();
-}
-
-function equippedWeapon(){
-  if(!state.hero.equippedWeaponId) return null;
-  return state.hero.inventory.find(function(w){ return w.id === state.hero.equippedWeaponId; }) || null;
-}
-
-// Stats de base + bonus de l'arme équipée.
+// Stats de base + bonus de TOUS les emplacements équipés.
 function totalStats(){
-  const base = state.hero.stats;
-  const weapon = equippedWeapon();
-  const bonus = weapon ? weapon.bonus : {};
-  return {
-    force: base.force + (bonus.force || 0),
-    endurance: base.endurance + (bonus.endurance || 0),
-    vitesse: base.vitesse + (bonus.vitesse || 0)
-  };
+  const total = baseStats();
+  equippedItems().forEach(function(item){
+    Object.keys(item.bonus).forEach(function(stat){
+      if(total[stat] !== undefined){ total[stat] += item.bonus[stat]; }
+    });
+  });
+  return total;
 }
 
-// Force de base pour la moitié, puis le bonus d'arme en entier : une arme
-// rare pèse ainsi vraiment dans les dégâts.
-function attackDamage(){
-  const weapon = equippedWeapon();
-  const weaponForce = weapon && weapon.bonus.force ? weapon.bonus.force : 0;
-  return 3 + Math.round(state.hero.stats.force / 2) + weaponForce;
+function totalPower(){
+  const s = totalStats();
+  return s.force + s.endurance + s.vitesse;
+}
+
+// Le forgeage ajoute +1 à chaque bonus de l'objet, par niveau d'amélioration.
+function effectiveBonus(item){
+  const out = {};
+  Object.keys(item.bonus).forEach(function(stat){
+    out[stat] = item.bonus[stat];
+  });
+  return out;
 }
 
 function bonusLabel(bonus){
-  return Object.keys(bonus).map(function(k){
-    return "+" + bonus[k] + " " + k;
+  return Object.keys(bonus).map(function(stat){
+    return "+" + bonus[stat] + " " + stat;
   }).join(" · ");
 }
 
+function itemDisplayName(item){
+  return item.upgradeCount > 0 ? item.name + " +" + item.upgradeCount : item.name;
+}
+
+function createItem(rarity){
+  const table = LOOT_TABLES[rarity] || LOOT_COMMON;
+  const pick = table[Math.floor(Math.random() * table.length)];
+  const bonus = {};
+  Object.keys(pick.bonus).forEach(function(stat){ bonus[stat] = pick.bonus[stat]; });
+  return {
+    id: nextId(),
+    name: pick.name,
+    slot: pick.slot,
+    bonus: bonus,
+    rarity: rarity,
+    upgradeCount: 0
+  };
+}
+
+function addItem(item){
+  state.hero.inventory.push(item);
+  // Emplacement encore vide : on équipe directement, c'est toujours un gain.
+  if(!state.hero.equipment[item.slot]){
+    state.hero.equipment[item.slot] = item.id;
+  }
+  return item;
+}
+
+/* ================= DONJON AUTOMATIQUE ================= */
+function stageDifficulty(stage){
+  const base = 15 * Math.pow(1.35, stage);
+  return stage === DUNGEON_MAX_STAGE ? base * 1.5 : base;
+}
+
+function winProbability(stage){
+  const power = totalPower();
+  const raw = power / (power + stageDifficulty(stage));
+  return Math.max(0.05, Math.min(0.95, raw));
+}
+
+function rollDropRarity(stage){
+  // Plus le palier est haut, plus le butin penche vers "rare".
+  const rareChance = Math.min(0.6, 0.05 + stage * 0.06);
+  return Math.random() < rareChance ? "rare" : "common";
+}
+
+// Résout une tentative et applique ses effets. Retourne le détail du combat.
+function resolveDungeonAttempt(){
+  const hero = state.hero;
+  const stage = hero.dungeon.stage;
+  const isBoss = stage === DUNGEON_MAX_STAGE;
+  const won = Math.random() < winProbability(stage);
+  const result = { stage: stage, isBoss: isBoss, won: won, essence: 0, gold: 0, item: null };
+
+  if(won){
+    const multiplier = isBoss ? 3 : 1;
+    result.essence = (2 + stage) * multiplier;
+    result.gold = (3 + stage * 2) * multiplier;
+    hero.dungeon.essence += result.essence;   // banqué immédiatement
+    hero.gold += result.gold;
+
+    const dropChance = isBoss ? 1 : (0.10 + stage * 0.02);
+    if(Math.random() < dropChance){
+      result.item = addItem(createItem(isBoss ? "rare" : rollDropRarity(stage)));
+    }
+    hero.dungeon.stage = isBoss ? 1 : stage + 1;
+  } else {
+    hero.dungeon.stage = 1;
+  }
+  return result;
+}
+
+let fightLog = [];
+let lastResult = null;
+
+function pushLog(result){
+  fightLog.unshift(result);
+  fightLog = fightLog.slice(0, 5);
+  lastResult = result;
+}
+
+function describeResult(result){
+  if(!result) return "Le donjon t'attend…";
+  const where = result.isBoss ? "Boss" : "Palier " + result.stage;
+  if(!result.won){
+    return "💀 " + where + " — échec, retour au palier 1";
+  }
+  return "✅ " + where + " franchi · +" + result.essence + " essence · +" + result.gold + " or" +
+    (result.item ? " · 🎁 " + itemDisplayName(result.item) : "");
+}
+
+// Rattrapage du temps écoulé (chargement de page ou retour sur l'onglet).
+function catchUpDungeon(){
+  const dungeon = state.hero.dungeon;
+  const elapsed = Date.now() - dungeon.lastTick;
+  const ticks = Math.floor(elapsed / (DUNGEON_TICK_SECONDS * 1000));
+  if(ticks <= 0) return;
+
+  const attempts = Math.min(ticks, MAX_OFFLINE_TICKS);
+  const summary = { cleared: 0, essence: 0, gold: 0, items: 0 };
+  for(let i = 0; i < attempts; i++){
+    const result = resolveDungeonAttempt();
+    pushLog(result);
+    if(result.won){
+      summary.cleared += 1;
+      summary.essence += result.essence;
+      summary.gold += result.gold;
+      if(result.item){ summary.items += 1; }
+    }
+  }
+  dungeon.lastTick = Date.now();
+  saveHero();
+
+  showToast("Pendant ton absence : " + summary.cleared + " palier" + (summary.cleared > 1 ? "s" : "") +
+    " franchi" + (summary.cleared > 1 ? "s" : "") + ", +" + summary.essence + " essence, +" +
+    summary.gold + " or, " + summary.items + " objet" + (summary.items > 1 ? "s" : "") + " trouvé" +
+    (summary.items > 1 ? "s" : ""));
+}
+
+let animating = false;
+
+function runLiveTick(){
+  const result = resolveDungeonAttempt();
+  state.hero.dungeon.lastTick = Date.now();
+  pushLog(result);
+  saveHero();
+  animateFight(result);
+}
+
+function animateFight(result){
+  animating = true;
+  const fill = document.getElementById("dungeonHpFill");
+  fill.style.transition = "none";
+  fill.style.width = "100%";
+  void fill.offsetWidth; // force le reflow pour repartir de 100 %
+  fill.style.transition = "width 1s ease";
+  fill.style.width = result.won ? "0%" : "45%";
+  document.getElementById("dungeonResult").textContent = "Assaut en cours…";
+
+  setTimeout(function(){
+    animating = false;
+    renderHero();
+    if(result.item){
+      showToast("🎁 " + itemDisplayName(result.item) + " (" + RARITY_LABELS[result.item.rarity] + ")");
+    }
+  }, 1100);
+}
+
+// Horloge unique : anime un combat quand l'onglet est visible, sinon laisse
+// le temps s'accumuler pour le rattrapage au retour.
+setInterval(function(){
+  if(state.activeView !== "hero" || document.hidden || animating) return;
+  const remaining = DUNGEON_TICK_SECONDS * 1000 - (Date.now() - state.hero.dungeon.lastTick);
+  if(remaining <= 0){
+    runLiveTick();
+  } else {
+    const el = document.getElementById("dungeonNext");
+    if(el){ el.textContent = "Prochain assaut dans " + Math.ceil(remaining / 1000) + " s"; }
+  }
+}, 1000);
+
 /* ================= PROGRESSION DEPUIS LES SÉANCES ================= */
-// Appelé par workout.js à la finalisation d'une séance — seule source
-// possible de XP, de charges d'attaque et donc d'or.
+// Appelé par workout.js à la finalisation d'une séance : seule source d'XP,
+// donc seule source de gemmes.
 function onWorkoutCompleted(session, options){
   const opts = options || {};
   const hero = state.hero;
@@ -100,18 +306,23 @@ function onWorkoutCompleted(session, options){
 
   let gained = setCount * 2;
   if(opts.hasPR){ gained += 15; }
-
   hero.xp += gained;
-  hero.attackCharges += setCount;
 
-  const levelsGained = [];
+  let levelsGained = 0;
+  let gemsGained = 0;
   while(hero.xp >= xpForNextLevel(hero.level)){
     hero.xp -= xpForNextLevel(hero.level);
     hero.level += 1;
     hero.stats.force += 1;
     hero.stats.endurance += 1;
     hero.stats.vitesse += 1;
-    levelsGained.push(hero.level);
+    hero.gems += 1;
+    gemsGained += 1;
+    if(hero.level % 5 === 0){
+      hero.gems += 3;
+      gemsGained += 3;
+    }
+    levelsGained += 1;
   }
 
   saveHero();
@@ -119,9 +330,9 @@ function onWorkoutCompleted(session, options){
 
   const parts = [];
   if(opts.prMessage){ parts.push(opts.prMessage); }
-  parts.push("⚔️ +" + gained + " XP · +" + setCount + " attaque" + (setCount > 1 ? "s" : ""));
-  if(levelsGained.length > 0){
-    parts.push("⭐ Niveau " + hero.level + " !");
+  parts.push("⚔️ +" + gained + " XP");
+  if(levelsGained > 0){
+    parts.push("⭐ Niveau " + hero.level + " · +" + gemsGained + " 💎");
   }
   showToast(parts.join("  ·  "));
 }
@@ -129,7 +340,10 @@ function onWorkoutCompleted(session, options){
 /* ================= RENDU ================= */
 function renderHero(){
   renderHeroCharacter();
-  renderHeroCombat();
+  renderDungeon();
+  renderUpgrades();
+  renderTreasure();
+  renderEquipment();
   renderHeroShop();
   renderHeroInventory();
 }
@@ -145,36 +359,94 @@ function renderHeroCharacter(){
   document.getElementById("heroXpText").textContent = hero.xp + " / " + needed + " XP";
   document.getElementById("heroXpFill").style.width = Math.min(100, (hero.xp / needed) * 100) + "%";
 
-  const stats = totalStats();
-  const base = hero.stats;
-  ["force","endurance","vitesse"].forEach(function(key){
-    const extra = stats[key] - base[key];
-    document.getElementById("heroStat-" + key).innerHTML =
-      stats[key] + (extra > 0 ? ' <span class="hero-stat-bonus">+' + extra + '</span>' : "");
+  const total = totalStats();
+  const base = baseStats();
+  ["force","endurance","vitesse"].forEach(function(stat){
+    const extra = total[stat] - base[stat];
+    document.getElementById("heroStat-" + stat).innerHTML =
+      fmtStat(total[stat]) +
+      (extra > 0 ? ' <span class="hero-stat-bonus">+' + fmtStat(extra) + '</span>' : "");
   });
 
+  document.getElementById("heroPower").textContent = fmtStat(totalPower());
   document.getElementById("heroGold").textContent = hero.gold;
+  document.getElementById("heroEssence").textContent = hero.dungeon.essence;
+  document.getElementById("heroGems").textContent = hero.gems;
 }
 
-function renderHeroCombat(){
+function renderDungeon(){
+  const dungeon = state.hero.dungeon;
+  const isBoss = dungeon.stage === DUNGEON_MAX_STAGE;
+
+  document.getElementById("dungeonStage").textContent = isBoss
+    ? "⚔️ BOSS"
+    : "Palier " + dungeon.stage + "/" + DUNGEON_MAX_STAGE;
+  document.getElementById("dungeonOdds").textContent =
+    Math.round(winProbability(dungeon.stage) * 100) + " % de réussite";
+
+  // Pendant l'animation, la barre est pilotée par animateFight().
+  if(!animating){
+    const fill = document.getElementById("dungeonHpFill");
+    fill.style.transition = "none";
+    fill.style.width = "100%";
+  }
+
+  document.getElementById("dungeonResult").textContent = describeResult(lastResult);
+
+  const log = document.getElementById("dungeonLog");
+  log.innerHTML = fightLog.length === 0
+    ? ""
+    : fightLog.map(function(r){
+        return '<div class="dungeon-log-line' + (r.won ? "" : " is-fail") + '">' +
+          escapeHtml(describeResult(r)) + "</div>";
+      }).join("");
+}
+
+function upgradeCost(stat){
+  return Math.round(10 * Math.pow(1.5, state.hero.essenceUpgrades[stat]));
+}
+
+function renderUpgrades(){
+  const essence = state.hero.dungeon.essence;
+  ["force","endurance","vitesse"].forEach(function(stat){
+    const cost = upgradeCost(stat);
+    const btn = document.getElementById("upgrade-" + stat);
+    btn.disabled = essence < cost;
+    btn.querySelector(".upgrade-cost").textContent = "✨ " + cost;
+  });
+}
+
+function renderTreasure(){
+  const gems = state.hero.gems;
+  document.getElementById("legendaryChestBtn").disabled = gems < LEGENDARY_CHEST_GEMS;
+
+  const select = document.getElementById("forgeSelect");
+  const inventory = state.hero.inventory;
+  const previous = select.value;
+  if(inventory.length === 0){
+    select.innerHTML = '<option value="">Aucun objet à forger</option>';
+    select.disabled = true;
+  } else {
+    select.disabled = false;
+    select.innerHTML = inventory.map(function(item){
+      return '<option value="' + item.id + '">' + escapeHtml(itemDisplayName(item)) +
+        " — " + SLOT_LABELS[item.slot] + "</option>";
+    }).join("");
+    if(inventory.some(function(i){ return i.id === previous; })){ select.value = previous; }
+  }
+  document.getElementById("forgeBtn").disabled = gems < FORGE_GEMS || inventory.length === 0;
+}
+
+function renderEquipment(){
   const hero = state.hero;
-  const monster = hero.currentMonster;
-
-  document.getElementById("monsterName").textContent = monster.name;
-  document.getElementById("monsterHpText").textContent = monster.hp + " / " + monster.maxHp + " PV";
-  document.getElementById("monsterHpFill").style.width = Math.max(0, (monster.hp / monster.maxHp) * 100) + "%";
-  document.getElementById("monsterReward").textContent = "🪙 " + monster.goldReward + " en butin";
-
-  const btn = document.getElementById("attackBtn");
-  const hasCharges = hero.attackCharges > 0;
-  btn.disabled = !hasCharges;
-  btn.textContent = hasCharges
-    ? "Attaquer (" + attackDamage() + " dégâts)"
-    : "Aucune attaque disponible";
-
-  document.getElementById("attackHint").textContent = hasCharges
-    ? hero.attackCharges + " attaque" + (hero.attackCharges > 1 ? "s" : "") + " en réserve"
-    : "Entraîne-toi pour recharger tes attaques";
+  document.getElementById("equipmentGrid").innerHTML = EQUIPMENT_SLOTS.map(function(slot){
+    const item = findItem(hero.equipment[slot]);
+    return '<button class="equip-slot' + (item ? " is-filled" : "") + '" data-goto-slot="' + slot + '">' +
+      '<span class="equip-slot-icon">' + SLOT_ICONS[slot] + "</span>" +
+      '<span class="equip-slot-label">' + SLOT_LABELS[slot] + "</span>" +
+      '<span class="equip-slot-item">' + (item ? escapeHtml(itemDisplayName(item)) : "vide") + "</span>" +
+      "</button>";
+  }).join("");
 }
 
 function renderHeroShop(){
@@ -187,49 +459,69 @@ function renderHeroInventory(){
   const el = document.getElementById("heroInventory");
   const hero = state.hero;
   if(hero.inventory.length === 0){
-    el.innerHTML = '<p class="empty-state">Aucune arme. Ouvre un coffre pour en trouver une.</p>';
+    el.innerHTML = '<p class="empty-state">Aucun objet. Le donjon et les coffres t\'en fourniront.</p>';
     return;
   }
-  el.innerHTML = hero.inventory.map(function(w){
-    const equipped = w.id === hero.equippedWeaponId;
-    return '<div class="weapon-item">' +
-      '<div class="weapon-info">' +
-      '<div class="weapon-name">' + escapeHtml(w.name) +
-      ' <span class="weapon-rarity ' + (w.rarity === "rare" ? "is-rare" : "is-common") + '">' +
-      (w.rarity === "rare" ? "rare" : "commune") + '</span></div>' +
-      '<div class="weapon-bonus">' + escapeHtml(bonusLabel(w.bonus)) + '</div>' +
-      '</div>' +
-      (equipped
-        ? '<span class="weapon-equipped">Équipée</span>'
-        : '<button class="btn-secondary weapon-equip" data-equip="' + w.id + '">Équiper</button>') +
-      '</div>';
+
+  el.innerHTML = EQUIPMENT_SLOTS.map(function(slot){
+    const items = hero.inventory.filter(function(item){ return item.slot === slot; });
+    if(items.length === 0) return "";
+    return '<div class="inv-group" id="inv-' + slot + '">' +
+      '<div class="inv-group-title">' + SLOT_ICONS[slot] + " " + SLOT_LABELS[slot] + "</div>" +
+      items.map(function(item){
+        const equipped = hero.equipment[slot] === item.id;
+        return '<div class="weapon-item">' +
+          '<div class="weapon-info">' +
+          '<div class="weapon-name">' + escapeHtml(itemDisplayName(item)) +
+          ' <span class="weapon-rarity is-' + item.rarity + '">' + RARITY_LABELS[item.rarity] + "</span></div>" +
+          '<div class="weapon-bonus">' + escapeHtml(bonusLabel(item.bonus)) + "</div>" +
+          "</div>" +
+          (equipped
+            ? '<button class="btn-secondary weapon-equip is-unequip" data-unequip="' + slot + '">Retirer</button>'
+            : '<button class="btn-secondary weapon-equip" data-equip="' + item.id + '">Équiper</button>') +
+          "</div>";
+      }).join("") +
+      "</div>";
   }).join("");
 }
 
-/* ================= COMBAT ================= */
-document.getElementById("attackBtn").addEventListener("click", function(){
-  const hero = state.hero;
-  if(hero.attackCharges <= 0) return;
-
-  hero.attackCharges -= 1;
-  hero.currentMonster.hp -= attackDamage();
-
-  let message = "";
-  if(hero.currentMonster.hp <= 0){
-    const reward = hero.currentMonster.goldReward;
-    const beaten = hero.currentMonster.name;
-    hero.gold += reward;
-    hero.monsterIndex += 1;
-    hero.currentMonster = makeMonster(hero.monsterIndex);
-    message = "🏅 " + beaten + " vaincu ! +" + reward + " or";
-  }
-
-  saveHero();
-  renderHero();
-  if(message){ showToast(message); }
+/* ================= AMÉLIORATIONS À L'ESSENCE ================= */
+["force","endurance","vitesse"].forEach(function(stat){
+  document.getElementById("upgrade-" + stat).addEventListener("click", function(){
+    const cost = upgradeCost(stat);
+    if(state.hero.dungeon.essence < cost) return;
+    state.hero.dungeon.essence -= cost;
+    state.hero.essenceUpgrades[stat] += 1;
+    saveHero();
+    renderHero();
+    showToast("✨ " + stat + " +0,5 (" + fmtStat(baseStats()[stat]) + " de base)");
+  });
 });
 
-/* ================= BOUTIQUE ================= */
+/* ================= TRÉSOR (GEMMES) ================= */
+document.getElementById("legendaryChestBtn").addEventListener("click", function(){
+  const hero = state.hero;
+  if(hero.gems < LEGENDARY_CHEST_GEMS) return;
+  hero.gems -= LEGENDARY_CHEST_GEMS;
+  const item = addItem(createItem("legendary"));
+  saveHero();
+  renderHero();
+  showToast("🌟 Légendaire : " + item.name + " (" + bonusLabel(item.bonus) + ")");
+});
+
+document.getElementById("forgeBtn").addEventListener("click", function(){
+  const hero = state.hero;
+  const item = findItem(document.getElementById("forgeSelect").value);
+  if(!item || hero.gems < FORGE_GEMS) return;
+  hero.gems -= FORGE_GEMS;
+  Object.keys(item.bonus).forEach(function(stat){ item.bonus[stat] += 1; });
+  item.upgradeCount += 1;
+  saveHero();
+  renderHero();
+  showToast("🔨 " + itemDisplayName(item) + " (" + bonusLabel(item.bonus) + ")");
+});
+
+/* ================= BOUTIQUE (OR) ================= */
 function openChest(rarity){
   const hero = state.hero;
   const price = rarity === "rare" ? CHEST_RARE_PRICE : CHEST_COMMON_PRICE;
@@ -237,31 +529,41 @@ function openChest(rarity){
     showToast("Il te manque " + (price - hero.gold) + " or.");
     return;
   }
-  const table = rarity === "rare" ? LOOT_RARE : LOOT_COMMON;
-  const pick = table[Math.floor(Math.random() * table.length)];
-
   hero.gold -= price;
-  const weapon = { id: nextId(), name: pick.name, bonus: pick.bonus, rarity: rarity };
-  hero.inventory.push(weapon);
-
-  // Première arme trouvée : on l'équipe directement.
-  if(!hero.equippedWeaponId){ hero.equippedWeaponId = weapon.id; }
-
+  const item = addItem(createItem(rarity));
   saveHero();
   renderHero();
-  showToast("🎁 " + weapon.name + " (" + bonusLabel(weapon.bonus) + ")");
+  showToast("🎁 " + item.name + " — " + SLOT_LABELS[item.slot] + " (" + bonusLabel(item.bonus) + ")");
 }
 
 document.getElementById("chestCommonBtn").addEventListener("click", function(){ openChest("common"); });
 document.getElementById("chestRareBtn").addEventListener("click", function(){ openChest("rare"); });
 
-/* ================= INVENTAIRE ================= */
+/* ================= ÉQUIPEMENT ET INVENTAIRE ================= */
 document.getElementById("heroInventory").addEventListener("click", function(e){
-  const btn = e.target.closest("[data-equip]");
+  const equip = e.target.closest("[data-equip]");
+  if(equip){
+    const item = findItem(equip.dataset.equip);
+    if(!item) return;
+    state.hero.equipment[item.slot] = item.id; // un seul objet actif par emplacement
+    saveHero();
+    renderHero();
+    return;
+  }
+  const unequip = e.target.closest("[data-unequip]");
+  if(unequip){
+    state.hero.equipment[unequip.dataset.unequip] = null;
+    saveHero();
+    renderHero();
+  }
+});
+
+document.getElementById("equipmentGrid").addEventListener("click", function(e){
+  const btn = e.target.closest("[data-goto-slot]");
   if(!btn) return;
-  state.hero.equippedWeaponId = btn.dataset.equip;
-  saveHero();
-  renderHero();
+  const group = document.getElementById("inv-" + btn.dataset.gotoSlot);
+  const target = group || document.querySelector(".hero-inventory-card");
+  target.scrollIntoView({ behavior: "smooth", block: "center" });
 });
 
 document.getElementById("heroName").addEventListener("input", function(e){
@@ -276,4 +578,10 @@ document.getElementById("heroName").addEventListener("blur", function(e){
   }
 });
 
-registerView("hero", renderHero);
+// L'entrée dans l'onglet crédite d'abord le temps écoulé, puis affiche.
+function showHeroView(){
+  catchUpDungeon();
+  renderHero();
+}
+
+registerView("hero", showHeroView);
