@@ -928,7 +928,10 @@
       const payload = JSON.parse(decodeURIComponent(escape(atob(raw))));
       state.nutri.waterLog = payload.waterLog || {};
       if(payload.theme){ state.nutri.theme = payload.theme; applyTheme(payload.theme); }
-      state.workout.sessions = payload.workouts || state.workout.sessions;
+      if(payload.workouts){
+        if(payload.unit !== "lbs"){ convertSessionsToLbs(payload.workouts); }
+        state.workout.sessions = payload.workouts;
+      }
       saveNutri();
       saveWorkout();
       renderNutrition();
