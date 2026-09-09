@@ -1603,6 +1603,12 @@
     saveWorkoutSoon();
   });
 
+  document.getElementById("sessionDate").addEventListener("change", function(e){
+    state.builder.date = normalizeSessionDate(e.target.value);
+    e.target.value = state.builder.date;
+    saveWorkout();
+  });
+
   document.getElementById("addExerciseBtn").addEventListener("click", function(){
     state.builder.exercises.push(newExercise());
     renderBuilder();
