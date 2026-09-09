@@ -761,12 +761,22 @@
       convertSessionsToLbs(sessions);
       convertSessionsToLbs(templates);
     }
-    return { sessions: sessions, templates: templates, builder: stored.builder || null };
+    return {
+      sessions: sessions,
+      templates: templates,
+      weeklyGoal: normalizeGoal(stored.weeklyGoal),
+      builder: stored.builder || null
+    };
+  }
+  function normalizeGoal(v){
+    const n = Math.round(Number(v));
+    return n >= 1 && n <= 14 ? n : 4;
   }
   function saveWorkout(){
     localStorage.setItem(WORKOUT_KEY, JSON.stringify({
       sessions: state.workout.sessions,
       templates: state.workout.templates,
+      weeklyGoal: state.workout.weeklyGoal,
       builder: state.builder,
       unit: "lbs"
     }));
