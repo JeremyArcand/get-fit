@@ -1211,6 +1211,7 @@
     if(!b || !Array.isArray(b.exercises) || b.exercises.length === 0) return;
     state.builder = {
       name: typeof b.name === "string" ? b.name : "",
+      date: normalizeSessionDate(b.date),
       exercises: b.exercises.map(function(ex){
         const sets = Array.isArray(ex.sets) && ex.sets.length
           ? ex.sets.map(function(s){
