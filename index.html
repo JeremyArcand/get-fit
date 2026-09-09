@@ -1258,6 +1258,59 @@
     }, 4000);
   }
 
+  /* ================= OBJECTIF HEBDOMADAIRE + STREAK ================= */
+  function sessionsPerWeek(){
+    const counts = {};
+    state.workout.sessions.forEach(function(s){
+      const start = getWeekRange(s.date).start;
+      counts[start] = (counts[start] || 0) + 1;
+    });
+    return counts;
+  }
+
+  // Semaines consécutives ayant atteint l'objectif, en repartant de la semaine
+  // dernière : la semaine en cours n'est pas finie, elle ne compte ni ne casse.
+  function weeklyStreak(){
+    const goal = state.workout.weeklyGoal;
+    if(!(goal > 0)) return 0;
+    const counts = sessionsPerWeek();
+    let week = addDaysISO(getWeekRange(todayISO()).start, -7);
+    let streak = 0;
+    while((counts[week] || 0) >= goal){
+      streak++;
+      week = addDaysISO(week, -7);
+    }
+    return streak;
+  }
+
+  function renderGoal(){
+    const goal = state.workout.weeklyGoal;
+    const week = getWeekRange(todayISO());
+    const done = sessionsPerWeek()[week.start] || 0;
+
+    document.getElementById("goalCount").textContent = done;
+    document.getElementById("goalOf").textContent = "/ " + goal;
+    setRing(document.getElementById("goalRing"), 50, done / goal);
+
+    const input = document.getElementById("weeklyGoalInput");
+    if(document.activeElement !== input){ input.value = goal; }
+
+    const streak = weeklyStreak();
+    document.getElementById("goalStreak").textContent =
+      "🔥 " + streak + " semaine" + (streak > 1 ? "s" : "");
+
+    const remaining = goal - done;
+    document.getElementById("goalSub").textContent = remaining <= 0
+      ? "Objectif atteint · " + formatShortFR(week.start) + " au " + formatShortFR(week.end)
+      : "Encore " + remaining + " séance" + (remaining > 1 ? "s" : "") + " d'ici dimanche";
+  }
+
+  document.getElementById("weeklyGoalInput").addEventListener("change", function(e){
+    state.workout.weeklyGoal = normalizeGoal(e.target.value);
+    saveWorkout();
+    renderGoal();
+  });
+
   /* ================= MODÈLES DE SÉANCE ================= */
   function renderTemplates(){
     const card = document.getElementById("templatesCard");
