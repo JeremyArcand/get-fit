@@ -1443,6 +1443,10 @@
   });
 
   document.getElementById("exerciseList").addEventListener("click", function(e){
+    if(e.target.closest("[data-rest-set]")){
+      startRest(restDuration);
+      return;
+    }
     const addSet = e.target.closest("[data-add-set]");
     if(addSet){
       const ex = state.builder.exercises.find(function(x){ return x.id === addSet.dataset.addSet; });
