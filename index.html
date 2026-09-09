@@ -1556,12 +1556,10 @@
     }
   });
 
-  function sessionVolume(session){
-    let vol = 0;
-    session.exercises.forEach(function(ex){
-      ex.sets.forEach(function(s){ vol += (s.reps||0) * (s.weight||0); });
-    });
-    return Math.round(vol);
+  function sessionSetCount(session){
+    let n = 0;
+    session.exercises.forEach(function(ex){ n += ex.sets.length; });
+    return n;
   }
 
   function renderSessionHistory(){
