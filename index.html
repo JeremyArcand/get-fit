@@ -1562,6 +1562,9 @@
 
   function renderBuilder(){
     document.getElementById("sessionName").value = state.builder.name;
+    const dateInput = document.getElementById("sessionDate");
+    dateInput.max = todayISO();
+    if(document.activeElement !== dateInput){ dateInput.value = state.builder.date; }
     const list = document.getElementById("exerciseList");
     const names = allExerciseNames();
     let datalistHtml = '<datalist id="exNameList">' + names.map(function(n){ return '<option value="'+escapeHtml(n)+'">'; }).join("") + '</datalist>';
