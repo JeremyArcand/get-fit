@@ -1149,7 +1149,33 @@
     container.innerHTML = html;
   }
 
+  function builderHasData(){
+    return state.builder.name.trim() !== "" || state.builder.exercises.some(function(ex){
+      return (ex.name||"").trim() !== "" || ex.sets.some(function(s){ return s.reps !== "" || s.weight !== ""; });
+    });
+  }
+
   document.getElementById("sessionHistory").addEventListener("click", function(e){
+    const repeat = e.target.closest("[data-repeat-session]");
+    if(repeat){
+      const session = state.workout.sessions.find(function(s){ return s.id === repeat.dataset.repeatSession; });
+      if(!session) return;
+      if(builderHasData() && !confirm("Remplacer la séance en cours par une copie de « "+session.name+" » ?")) return;
+      state.builder = {
+        name: session.name,
+        exercises: session.exercises.map(function(ex){
+          return {
+            id: nextId(),
+            name: ex.name,
+            sets: ex.sets.map(function(s){ return { reps:String(s.reps), weight:String(s.weight) }; })
+          };
+        })
+      };
+      saveWorkout();
+      renderBuilder();
+      document.querySelector(".builder-card").scrollIntoView({ behavior:"smooth", block:"start" });
+      return;
+    }
     const del = e.target.closest("[data-del-session]");
     if(del){
       if(confirm("Supprimer cette séance ?")){
