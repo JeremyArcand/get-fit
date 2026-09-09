@@ -1141,8 +1141,9 @@
       html += '<div class="session-detail" '+(expanded?'':'hidden')+'>';
       session.exercises.forEach(function(ex){
         html += '<div class="sd-exercise"><div class="sd-exercise-name">'+escapeHtml(ex.name)+'</div>';
-        html += '<div class="sd-sets">'+ex.sets.map(function(s){ return s.reps+" × "+s.weight+" kg"; }).join(" &nbsp;·&nbsp; ")+'</div></div>';
+        html += '<div class="sd-sets">'+ex.sets.map(function(s){ return s.reps+" × "+fmtWeight(s.weight)+" lbs"; }).join(" &nbsp;·&nbsp; ")+'</div></div>';
       });
+      html += '<button class="repeat-btn" data-repeat-session="'+session.id+'">'+COPY_ICON+'Répéter cette séance</button>';
       html += '</div></div>';
     });
     container.innerHTML = html;
