@@ -565,32 +565,54 @@ function renderHeroCharacter(){
   document.getElementById("heroGems").textContent = hero.gems;
 }
 
+function fmtClock(totalSeconds){
+  const s = Math.max(0, Math.ceil(totalSeconds));
+  return Math.floor(s / 60) + ":" + (s % 60 < 10 ? "0" : "") + (s % 60);
+}
+
 function renderDungeon(){
-  const dungeon = state.hero.dungeon;
-  const isBoss = dungeon.stage === DUNGEON_MAX_STAGE;
+  const d = state.hero.dungeon;
+  const isBoss = isBossStage();
+  ensureMonster();
+  const monster = d.currentMonster;
 
-  document.getElementById("dungeonStage").textContent = isBoss
-    ? "⚔️ BOSS"
-    : "Palier " + dungeon.stage + "/" + DUNGEON_MAX_STAGE;
-  document.getElementById("dungeonOdds").textContent =
-    Math.round(winProbability(dungeon.stage) * 100) + " % de réussite";
+  document.getElementById("dungeonRun").textContent =
+    "Run " + d.run + " · " + (isBoss ? "⚔️ BOSS" : "Palier " + d.stage + "/" + DUNGEON_MAX_STAGE);
+  document.getElementById("dungeonDps").textContent = attackDamage() + " dégâts / attaque";
 
-  // Pendant l'animation, la barre est pilotée par animateFight().
-  if(!animating){
-    const fill = document.getElementById("dungeonHpFill");
-    fill.style.transition = "none";
-    fill.style.width = "100%";
+  document.getElementById("monsterEmoji").textContent = monster.icon;
+  document.getElementById("monsterName").textContent = monster.name;
+  document.getElementById("monsterHpText").textContent =
+    Math.max(0, Math.ceil(monster.hp)) + " / " + monster.maxHp + " PV";
+  document.getElementById("dungeonHpFill").style.width =
+    Math.max(0, (monster.hp / monster.maxHp) * 100) + "%";
+
+  // Bannière de boss : avant le clic, puis minuteur pendant le combat.
+  const banner = document.getElementById("bossBanner");
+  const startBtn = document.getElementById("bossStartBtn");
+  const timer = document.getElementById("bossTimer");
+  if(isBoss){
+    banner.hidden = false;
+    if(d.bossFightActive){
+      startBtn.hidden = true;
+      timer.hidden = false;
+      timer.textContent = fmtClock(d.bossTimeRemaining);
+      timer.classList.toggle("is-urgent", d.bossTimeRemaining <= 10);
+    } else {
+      startBtn.hidden = false;
+      timer.hidden = true;
+    }
+  } else {
+    banner.hidden = true;
   }
 
   document.getElementById("dungeonResult").textContent = describeResult(lastResult);
 
   const log = document.getElementById("dungeonLog");
-  log.innerHTML = fightLog.length === 0
-    ? ""
-    : fightLog.map(function(r){
-        return '<div class="dungeon-log-line' + (r.won ? "" : " is-fail") + '">' +
-          escapeHtml(describeResult(r)) + "</div>";
-      }).join("");
+  log.innerHTML = fightLog.map(function(entry){
+    return '<div class="dungeon-log-line' + (entry.fail ? " is-fail" : "") + '">' +
+      escapeHtml(describeResult(entry)) + "</div>";
+  }).join("");
 }
 
 function upgradeCost(stat){
