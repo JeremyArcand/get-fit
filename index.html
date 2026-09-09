@@ -557,14 +557,36 @@
       </header>
 
       <div class="grid">
+      <div class="card templates-card" id="templatesCard" hidden>
+        <h2>Mes modèles</h2>
+        <div class="template-list" id="templateList"></div>
+      </div>
+
       <div class="card builder-card">
         <h2>Nouvelle séance</h2>
+
+        <div class="rest-bar" id="restBar" hidden>
+          <div class="rest-head">
+            <span class="rest-time" id="restTime">1:30</span>
+            <span class="rest-label" id="restLabel">Repos en cours</span>
+            <button class="rest-stop" id="restStop">Arrêter</button>
+          </div>
+          <div class="water-bar"><div class="water-fill" id="restFill" style="width:100%"></div></div>
+          <div class="rest-presets" id="restPresets">
+            <button data-rest="30">30 s</button>
+            <button data-rest="60">60 s</button>
+            <button data-rest="90">90 s</button>
+            <button data-rest="120">120 s</button>
+          </div>
+        </div>
+
         <input type="text" id="sessionName" class="session-name-input" placeholder="Nom de la séance (ex. Push Day)">
         <div id="exerciseList"></div>
         <div class="builder-actions">
           <button class="btn-secondary" id="addExerciseBtn">+ Ajouter un exercice</button>
         </div>
         <div class="builder-actions" style="margin-top:10px;">
+          <button class="btn-secondary" id="saveTemplateBtn">Enregistrer comme modèle</button>
           <button class="btn-primary" id="finishSessionBtn">Terminer la séance</button>
         </div>
       </div>
