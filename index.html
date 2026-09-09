@@ -1499,10 +1499,27 @@
       name: state.builder.name.trim() || "Séance",
       exercises: cleanExercises
     };
+    const prsBefore = computePRs();
     state.workout.sessions.unshift(session);
+
+    const beaten = [];
+    cleanExercises.forEach(function(ex){
+      const best = Math.max.apply(null, ex.sets.map(function(s){ return s.weight; }));
+      const previous = prsBefore[ex.name];
+      if(best > 0 && (!previous || best > previous.weight)){
+        beaten.push(ex.name + " " + fmtWeight(best) + " lbs");
+      }
+    });
+
     resetBuilder();
     saveWorkout();
     renderWorkout();
+
+    if(beaten.length > 0){
+      const shown = beaten.slice(0,2).join(", ");
+      const extra = beaten.length > 2 ? " (+" + (beaten.length-2) + ")" : "";
+      showToast("🏆 Nouveau record : " + shown + extra);
+    }
   });
 
   function sessionVolume(session){
