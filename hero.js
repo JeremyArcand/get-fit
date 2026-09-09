@@ -300,7 +300,9 @@ document.getElementById("heroSprite").addEventListener("error", function(){
   spriteBroken = true;
   stopHeroAttack();
   this.hidden = true;
-  document.getElementById("heroSpriteFallback").hidden = false;
+  // SVGElement n'hérite pas de HTMLElement : « .hidden = false » ne ferait que
+  // poser une propriété JS sans retirer l'attribut, il faut passer par le DOM.
+  document.getElementById("heroSpriteFallback").removeAttribute("hidden");
 });
 
 let animating = false;
