@@ -284,19 +284,64 @@
             <span class="hero-stat-name">Vitesse</span>
           </div>
         </div>
-        <div class="hero-gold">🪙 <span id="heroGold">0</span> or</div>
+        <div class="hero-resources">
+          <div class="hero-res"><span class="hero-res-val" id="heroPower">15</span><span class="hero-res-name">Puissance</span></div>
+          <div class="hero-res"><span class="hero-res-val">🪙 <span id="heroGold">0</span></span><span class="hero-res-name">Or</span></div>
+          <div class="hero-res"><span class="hero-res-val">✨ <span id="heroEssence">0</span></span><span class="hero-res-name">Essence</span></div>
+          <div class="hero-res"><span class="hero-res-val">💎 <span id="heroGems">0</span></span><span class="hero-res-name">Gemmes</span></div>
+        </div>
       </div>
 
-      <div class="card hero-fight-card">
-        <h2>Combat</h2>
+      <div class="card dungeon-card">
+        <h2>Donjon</h2>
         <div class="hero-bar-label">
-          <span class="monster-name" id="monsterName">—</span>
-          <span id="monsterHpText">0 / 0 PV</span>
+          <span class="dungeon-stage" id="dungeonStage">Palier 1/10</span>
+          <span id="dungeonOdds">—</span>
         </div>
-        <div class="water-bar"><div class="hp-fill" id="monsterHpFill" style="width:100%"></div></div>
-        <p class="monster-reward" id="monsterReward">—</p>
-        <button class="btn-primary hero-attack" id="attackBtn">Attaquer</button>
-        <p class="attack-hint" id="attackHint">—</p>
+        <div class="water-bar"><div class="hp-fill" id="dungeonHpFill" style="width:100%"></div></div>
+        <p class="dungeon-result" id="dungeonResult">Le donjon t'attend…</p>
+        <p class="dungeon-next" id="dungeonNext">Le donjon progresse tout seul, même hors ligne.</p>
+        <div class="dungeon-log" id="dungeonLog"></div>
+      </div>
+
+      <div class="card upgrade-card">
+        <h2>Améliorer <span class="card-sub">avec l'essence</span></h2>
+        <div class="upgrade-row">
+          <button class="btn-secondary upgrade-btn" id="upgrade-force">
+            <span class="upgrade-stat">Force</span>
+            <span class="upgrade-gain">+0,5</span>
+            <span class="upgrade-cost">✨ 10</span>
+          </button>
+          <button class="btn-secondary upgrade-btn" id="upgrade-endurance">
+            <span class="upgrade-stat">Endurance</span>
+            <span class="upgrade-gain">+0,5</span>
+            <span class="upgrade-cost">✨ 10</span>
+          </button>
+          <button class="btn-secondary upgrade-btn" id="upgrade-vitesse">
+            <span class="upgrade-stat">Vitesse</span>
+            <span class="upgrade-gain">+0,5</span>
+            <span class="upgrade-cost">✨ 10</span>
+          </button>
+        </div>
+      </div>
+
+      <div class="card treasure-card">
+        <h2>Trésor <span class="card-sub">gemmes gagnées en niveau</span></h2>
+        <button class="btn-secondary chest-btn legendary-btn" id="legendaryChestBtn">
+          <span class="chest-icon">🌟</span>
+          <span class="chest-name">Coffre légendaire</span>
+          <span class="chest-price">💎 5 gemmes</span>
+        </button>
+        <div class="forge-row">
+          <select id="forgeSelect" aria-label="Objet à forger"></select>
+          <button class="btn-primary forge-btn" id="forgeBtn">Forger 💎 3</button>
+        </div>
+        <p class="forge-hint">Le forgeage ajoute +1 à chaque bonus de l'objet choisi.</p>
+      </div>
+
+      <div class="card equipment-card">
+        <h2>Équipement actuel</h2>
+        <div class="equipment-grid" id="equipmentGrid"></div>
       </div>
 
       <div class="card hero-shop-card">
