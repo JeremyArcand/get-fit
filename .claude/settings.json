@@ -1,0 +1,15 @@
+{
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "Edit|Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "cd \"$CLAUDE_PROJECT_DIR\" && git add -A && git diff --cached --quiet || (git commit -m \"Mise à jour automatique via Claude Code\" --quiet && git push --quiet)"
+          }
+        ]
+      }
+    ]
+  }
+}
