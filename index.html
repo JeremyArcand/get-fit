@@ -1043,10 +1043,12 @@
 
   function buildSaveCode(){
     const payload = {
-      v:2,
+      v:3,
       waterLog: state.nutri.waterLog,
+      weightLog: state.nutri.weightLog,
       theme: state.nutri.theme,
       workouts: state.workout.sessions,
+      templates: state.workout.templates,
       unit: "lbs"
     };
     return btoa(unescape(encodeURIComponent(JSON.stringify(payload))));
