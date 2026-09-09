@@ -1724,7 +1724,11 @@
     Object.keys(prs).forEach(function(name){ prSessions[prs[name].sessionId] = true; });
 
     let html = "";
-    state.workout.sessions.forEach(function(session){
+    // Une séance peut être datée d'hier : on trie plutôt que de se fier à l'ordre d'ajout.
+    state.workout.sessions
+      .slice()
+      .sort(function(a,b){ return b.date.localeCompare(a.date); })
+      .forEach(function(session){
       const expanded = !!state.expandedSessions[session.id];
       const badge = prSessions[session.id]
         ? '<span class="pr-badge" title="Record personnel établi lors de cette séance">🏆</span>'
