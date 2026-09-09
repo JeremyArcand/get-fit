@@ -332,67 +332,17 @@
   .pstat-val{font-size:17px;font-weight:700;color:var(--text);font-variant-numeric:tabular-nums;}
   .pstat-label{font-size:10px;color:var(--text-tertiary);font-weight:600;margin-top:2px;text-transform:uppercase;letter-spacing:0.02em;}
 
-  /* ===================== RESPONSIVE ===================== */
-  @media (max-width:699px){
-    .card{padding:16px;border-radius:18px;}
-    textarea, input[type="text"], input[type="number"], select{font-size:16px;}
-    .set-row input{font-size:16px;padding:9px;}
+  /* Les champs sous 16px déclenchent un zoom automatique sur iOS. */
+  textarea, input[type="text"], input[type="number"], select, .set-row input{font-size:16px;}
+
+  @media (max-width:520px){
+    .screen{padding:16px 12px calc(36px + env(safe-area-inset-bottom,0px));}
+    .topbar-inner{padding:8px 12px;}
+    .tab-btn{padding:9px 11px;}
+    .card{padding:16px;}
     .header-top h1{font-size:26px;}
-    .hero-card{padding:20px 16px;}
-    .ring-wrap{width:180px;height:180px;}
+    .ring-wrap{width:176px;height:176px;}
     .ring-value{font-size:38px;}
-    .water-controls button{height:44px;}
-  }
-  @media (min-width:700px){
-    body{padding:24px 20px;}
-    .app-shell{
-      max-width:1180px;
-      height:min(960px, calc(100dvh - 48px));
-      border-radius:26px;
-      border:1px solid var(--border);
-      box-shadow:0 26px 60px -28px rgba(0,0,0,0.4);
-    }
-    .screen{
-      padding:16px 26px 26px;
-      scrollbar-width:thin;
-      scrollbar-color:rgba(128,128,128,0.4) transparent;
-    }
-    .screen::-webkit-scrollbar{display:block;width:9px;}
-    .screen::-webkit-scrollbar-thumb{background:rgba(128,128,128,0.35);border-radius:5px;}
-    .tabbar{
-      order:-1;
-      border-top:none;
-      border-bottom:1px solid var(--border);
-      justify-content:center;
-      gap:8px;
-      padding:12px 16px;
-    }
-    .tab-btn{
-      flex:0 0 auto;flex-direction:row;gap:9px;
-      padding:9px 20px;border-radius:12px;font-size:14px;
-    }
-    .tab-btn.active{background:var(--bg-elevated);}
-    .tab-btn svg{width:19px;height:19px;}
-    .segmented{max-width:420px;}
-  }
-  @media (min-width:960px){
-    .grid{
-      display:grid;
-      grid-template-columns:repeat(2,minmax(0,1fr));
-      gap:16px;
-      align-items:start;
-    }
-    .grid > .card{margin-bottom:0;}
-    .nutrition-grid .hero-card{grid-column:1;grid-row:1 / span 2;}
-    .nutrition-grid .macros-card{grid-column:2;grid-row:1;}
-    .nutrition-grid .water-card{grid-column:2;grid-row:2;}
-    .nutrition-grid .history-card{grid-column:1;grid-row:3;}
-    .nutrition-grid .diary-card{grid-column:2;grid-row:3;}
-    .nutrition-grid .save-card{grid-column:1 / -1;grid-row:4;}
-    .workout-grid .builder-card{grid-column:1;grid-row:1 / span 2;}
-    .workout-grid .history-card{grid-column:2;grid-row:1;}
-    .workout-grid .progress-card{grid-column:2;grid-row:2;}
-    .ring-wrap{width:230px;height:230px;}
   }
 </style>
 </head>
