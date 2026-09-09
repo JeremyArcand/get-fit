@@ -333,6 +333,72 @@
   .pstat-val{font-size:17px;font-weight:700;color:var(--text);font-variant-numeric:tabular-nums;}
   .pstat-label{font-size:10px;color:var(--text-tertiary);font-weight:600;margin-top:2px;text-transform:uppercase;letter-spacing:0.02em;}
 
+  /* Poids corporel */
+  .weight-row{display:flex;gap:10px;margin-bottom:14px;}
+  .weight-row input{flex:1;min-width:0;}
+  .weight-row button{flex:0 0 auto;padding:11px 18px;}
+  .weight-delta{font-size:12px;font-weight:600;color:var(--text-secondary);}
+
+  /* Modèles de séance */
+  .template-list{display:flex;flex-wrap:wrap;gap:8px;}
+  .template-chip{
+    display:flex;align-items:center;gap:4px;
+    background:var(--bg-elevated-2);border:1px solid var(--border);
+    border-radius:999px;padding:5px 6px 5px 14px;
+  }
+  .tpl-use{
+    background:none;border:none;padding:0;cursor:pointer;
+    color:var(--text);font-size:13px;font-weight:600;font-family:inherit;
+  }
+  .tpl-del{
+    width:22px;height:22px;flex-shrink:0;border-radius:50%;border:none;background:var(--bg);
+    color:var(--text-tertiary);display:flex;align-items:center;justify-content:center;cursor:pointer;
+  }
+
+  /* Minuteur de repos */
+  .rest-bar{
+    background:var(--bg-elevated-2);border:1px solid var(--border);border-radius:14px;
+    padding:12px 14px;margin-bottom:14px;
+    transition:background 0.3s ease, border-color 0.3s ease;
+  }
+  .rest-bar.is-done{
+    background:rgba(37,99,235,0.14);border-color:var(--accent-2);
+    animation:restFlash 0.5s ease-in-out 3;
+  }
+  @keyframes restFlash{50%{background:rgba(37,99,235,0.32);}}
+  .rest-head{display:flex;align-items:center;gap:10px;margin-bottom:9px;}
+  .rest-time{font-size:21px;font-weight:700;color:var(--text);font-variant-numeric:tabular-nums;letter-spacing:-0.01em;}
+  .rest-label{flex:1;font-size:13px;color:var(--text-secondary);}
+  .rest-stop{background:none;border:none;color:var(--danger);font-size:13px;font-weight:700;cursor:pointer;font-family:inherit;}
+  .rest-presets{display:flex;gap:6px;margin-top:10px;}
+  .rest-presets button{
+    flex:1;padding:7px 0;border-radius:9px;border:1px solid var(--border);
+    background:var(--bg);color:var(--text-secondary);
+    font-size:12px;font-weight:700;cursor:pointer;font-family:inherit;
+  }
+  .rest-presets button.active{background:var(--accent-1);border-color:var(--accent-1);color:#fff;}
+
+  /* Records personnels */
+  .record-item{display:flex;align-items:center;gap:10px;padding:10px 0;border-top:1px solid var(--border);}
+  .record-item:first-child{border-top:none;}
+  .record-info{flex:1;min-width:0;}
+  .record-name{font-size:14px;font-weight:600;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+  .record-meta{font-size:12px;color:var(--text-secondary);margin-top:1px;}
+  .record-weight{font-size:15px;font-weight:700;color:var(--text);font-variant-numeric:tabular-nums;white-space:nowrap;}
+  .pr-badge{margin-left:6px;}
+
+  /* Notification passagère */
+  .toast{
+    position:fixed;left:50%;bottom:calc(22px + env(safe-area-inset-bottom,0px));
+    transform:translateX(-50%) translateY(14px);
+    background:var(--text);color:var(--bg);
+    padding:12px 18px;border-radius:12px;
+    font-size:14px;font-weight:600;text-align:center;
+    max-width:calc(100% - 32px);z-index:60;
+    opacity:0;transition:opacity 0.3s ease, transform 0.3s ease;
+  }
+  .toast.show{opacity:1;transform:translateX(-50%) translateY(0);}
+
   /* Les champs sous 16px déclenchent un zoom automatique sur iOS. */
   textarea, input[type="text"], input[type="number"], select, .set-row input{font-size:16px;}
 
