@@ -283,6 +283,7 @@ function buildSaveCode(){
     workouts: state.workout.sessions,
     templates: state.workout.templates,
     weeklyGoal: state.workout.weeklyGoal,
+    hero: state.hero,
     unit: "lbs"
   };
   return btoa(unescape(encodeURIComponent(JSON.stringify(payload))));
