@@ -507,3 +507,9 @@ textarea, input[type="text"], input[type="number"], input[type="date"], select, 
   .ring-wrap{width:176px;height:176px;}
   .ring-value{font-size:38px;}
 }
+
+/* Très petits écrans : les icônes d'onglet suffisent. */
+@media (max-width:369px){
+  .tab-btn span{display:none;}
+  .tab-btn{padding:9px 12px;}
+}
