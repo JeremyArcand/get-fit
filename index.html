@@ -691,12 +691,17 @@
     let stored = {};
     try { stored = JSON.parse(localStorage.getItem(WORKOUT_KEY)) || {}; } catch(e){ stored = {}; }
     const sessions = stored.sessions || [];
-    if(stored.unit !== "lbs"){ convertSessionsToLbs(sessions); }
-    return { sessions: sessions, builder: stored.builder || null };
+    const templates = stored.templates || [];
+    if(stored.unit !== "lbs"){
+      convertSessionsToLbs(sessions);
+      convertSessionsToLbs(templates);
+    }
+    return { sessions: sessions, templates: templates, builder: stored.builder || null };
   }
   function saveWorkout(){
     localStorage.setItem(WORKOUT_KEY, JSON.stringify({
       sessions: state.workout.sessions,
+      templates: state.workout.templates,
       builder: state.builder,
       unit: "lbs"
     }));
