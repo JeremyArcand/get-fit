@@ -1034,11 +1034,13 @@
 
   document.getElementById("sessionName").addEventListener("input", function(e){
     state.builder.name = e.target.value;
+    saveWorkoutSoon();
   });
 
   document.getElementById("addExerciseBtn").addEventListener("click", function(){
     state.builder.exercises.push(newExercise());
     renderBuilder();
+    saveWorkout();
   });
 
   document.getElementById("exerciseList").addEventListener("input", function(e){
@@ -1050,25 +1052,38 @@
       const ex = state.builder.exercises.find(function(x){ return x.id === t.dataset.ex; });
       if(ex){ ex.sets[parseInt(t.dataset.set,10)][t.dataset.field] = t.value; }
     }
+    saveWorkoutSoon();
   });
 
   document.getElementById("exerciseList").addEventListener("click", function(e){
     const addSet = e.target.closest("[data-add-set]");
     if(addSet){
       const ex = state.builder.exercises.find(function(x){ return x.id === addSet.dataset.addSet; });
-      if(ex){ ex.sets.push(newSet()); renderBuilder(); }
+      if(ex){ ex.sets.push(newSet(ex.sets[ex.sets.length-1])); renderBuilder(); saveWorkout(); }
+      return;
+    }
+    const copySet = e.target.closest("[data-copy-set]");
+    if(copySet){
+      const ex = state.builder.exercises.find(function(x){ return x.id === copySet.dataset.ex; });
+      if(ex){
+        const i = parseInt(copySet.dataset.set,10);
+        ex.sets.splice(i+1, 0, newSet(ex.sets[i]));
+        renderBuilder();
+        saveWorkout();
+      }
       return;
     }
     const removeEx = e.target.closest("[data-remove-ex]");
     if(removeEx){
       state.builder.exercises = state.builder.exercises.filter(function(x){ return x.id !== removeEx.dataset.removeEx; });
       renderBuilder();
+      saveWorkout();
       return;
     }
     const removeSet = e.target.closest("[data-remove-set]");
     if(removeSet){
       const ex = state.builder.exercises.find(function(x){ return x.id === removeSet.dataset.ex; });
-      if(ex){ ex.sets.splice(parseInt(removeSet.dataset.set,10),1); renderBuilder(); }
+      if(ex){ ex.sets.splice(parseInt(removeSet.dataset.set,10),1); renderBuilder(); saveWorkout(); }
       return;
     }
   });
