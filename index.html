@@ -1191,7 +1191,13 @@
   }
 
   function resetBuilder(){
-    state.builder = { name:"", exercises:[ newExercise() ] };
+    state.builder = { name:"", date: todayISO(), exercises:[ newExercise() ] };
+  }
+  // Une séance ne peut pas être datée dans le futur.
+  function normalizeSessionDate(iso){
+    const today = todayISO();
+    if(typeof iso !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(iso)) return today;
+    return iso > today ? today : iso;
   }
   function newExercise(){
     return { id: nextId(), name:"", sets:[ newSet() ] };
