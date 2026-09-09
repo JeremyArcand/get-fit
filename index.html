@@ -1233,6 +1233,7 @@
 
   function renderWorkout(){
     document.getElementById("workoutDateSub").textContent = formatLongFR(todayISO());
+    renderGoal();
     renderTemplates();
     renderBuilder();
     renderSessionHistory();
