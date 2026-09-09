@@ -14,6 +14,11 @@ const DUNGEON_TICK_SECONDS = 20;
 const MAX_OFFLINE_TICKS = 100;
 const DUNGEON_MAX_STAGE = 10;
 
+// Sprites du héros (frames exportées de Spritesheets.ai, 1 sur 5 conservée).
+const HERO_ATTACK_FRAME_COUNT = 12;
+const HERO_ATTACK_FRAME_MS = 80;
+const HERO_IDLE_SRC = "assets/hero/hero-idle.png";
+
 const LEGENDARY_CHEST_GEMS = 5;
 const FORGE_GEMS = 3;
 const CHEST_COMMON_PRICE = 25;
