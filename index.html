@@ -294,23 +294,39 @@
 
       <div class="card dungeon-card">
         <h2>Donjon</h2>
-        <div class="hero-sprite-wrap">
-          <img id="heroSprite" class="hero-sprite" src="assets/hero/hero-idle.png" alt="Héros" draggable="false">
-          <svg id="heroSpriteFallback" class="hero-sprite-fallback" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" hidden>
-            <circle cx="12" cy="5" r="2.6"/>
-            <path d="M12 7.8v7"/>
-            <path d="M8.2 10.4 12 9l3.8 1.4"/>
-            <path d="M12 14.8 9.4 21"/>
-            <path d="m12 14.8 2.6 6.2"/>
-          </svg>
+        <div class="dungeon-arena">
+          <div class="hero-sprite-wrap">
+            <img id="heroSprite" class="hero-sprite" src="assets/hero/hero-idle.png" alt="Héros" draggable="false">
+            <svg id="heroSpriteFallback" class="hero-sprite-fallback" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" hidden>
+              <circle cx="12" cy="5" r="2.6"/>
+              <path d="M12 7.8v7"/>
+              <path d="M8.2 10.4 12 9l3.8 1.4"/>
+              <path d="M12 14.8 9.4 21"/>
+              <path d="m12 14.8 2.6 6.2"/>
+            </svg>
+          </div>
+          <div class="monster-figure" id="monsterFigure">
+            <span class="monster-emoji" id="monsterEmoji">👺</span>
+            <span class="fx-layer" id="monsterFx"></span>
+          </div>
         </div>
+
+        <div class="boss-banner" id="bossBanner" hidden>
+          <span class="boss-label">⚔️ Combat de boss</span>
+          <button class="btn-primary boss-start" id="bossStartBtn">Commencer le combat</button>
+          <span class="boss-timer" id="bossTimer" hidden>1:00</span>
+        </div>
+
         <div class="hero-bar-label">
-          <span class="dungeon-stage" id="dungeonStage">Palier 1/10</span>
-          <span id="dungeonOdds">—</span>
+          <span class="dungeon-stage" id="dungeonRun">Run 1 · Palier 1/10</span>
+          <span id="dungeonDps">—</span>
+        </div>
+        <div class="monster-line">
+          <span class="monster-name" id="monsterName">—</span>
+          <span class="monster-hp" id="monsterHpText">0 / 0 PV</span>
         </div>
         <div class="water-bar"><div class="hp-fill" id="dungeonHpFill" style="width:100%"></div></div>
         <p class="dungeon-result" id="dungeonResult">Le donjon t'attend…</p>
-        <p class="dungeon-next" id="dungeonNext">Le donjon progresse tout seul, même hors ligne.</p>
         <div class="dungeon-log" id="dungeonLog"></div>
       </div>
 
