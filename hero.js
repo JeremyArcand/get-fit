@@ -411,7 +411,15 @@ function cloturerJourNutrition(evalJour, iso) {
 const HERO = {
   gagnerXP: gagnerXP,
   ajusterMoral: ajusterMoralHero,
-  evaluerJourNutrition: evaluerJourNutrition,
+  evaluerJourNutrition: evaluerJourNutrition,          // pure : totaux, cibles -> eval ou null
+  mettreAJourSerieNutrition: function (evalJour) {     // applique à l'état courant
+    mettreAJourSerieNutrition(etatHero, evalJour);
+    sauvegarderEtatHero(etatHero);
+  },
+  cloturerJourNutrition: cloturerJourNutrition,
+  multiplicateurNutritionDuJour: function (evalJour) {
+    return multiplicateurNutritionDuJour(etatHero, evalJour);
+  },
   dernierJourNutritionEvalue: function () { return etatHero.compteurs.dernierJourNutritionEvalue; },
   marquerJourNutritionEvalue: function (iso) {
     etatHero.compteurs.dernierJourNutritionEvalue = iso;
