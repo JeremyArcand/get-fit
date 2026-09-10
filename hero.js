@@ -397,29 +397,14 @@ function ajusterMoralHero(delta) {
   return etatHero.moral;
 }
 
-// Clôture d'une journée de nutrition. `totaux` à null = rien loggé ce jour-là :
-// strictement neutre, ni moral ni série touchés. Un jour loggé mais raté coûte
-// du moral — c'est toute la différence entre optionnel et obligatoire.
-// `iso` sert à avancer le marqueur pour qu'un jour ne soit jamais évalué deux fois.
-function evaluerJourNutrition(totaux, cibles, iso) {
-  const c = etatHero.compteurs;
-  if (iso) c.dernierJourNutritionEvalue = iso;
-
-  if (totaux === null || totaux === undefined) {
-    sauvegarderEtatHero(etatHero);
-    return null;
-  }
-
-  const score = calculerScoreNutrition(totaux, cibles);
-  if (score >= CONFIG.nutrition.seuilReussite) {
-    ajusterMoral(etatHero, CONFIG.moral.jourNutritionReussi);
-    c.streakNutritionJours += 1;
-  } else {
-    ajusterMoral(etatHero, CONFIG.moral.jourNutritionRate);
-    c.streakNutritionJours = 0;
-  }
+// Clôture d'une journée : met à jour la série et avance le marqueur pour qu'un
+// jour ne soit jamais compté deux fois. Le moral n'est pas touché — la
+// nutrition n'accorde que des bonus.
+function cloturerJourNutrition(evalJour, iso) {
+  mettreAJourSerieNutrition(etatHero, evalJour);
+  if (iso) etatHero.compteurs.dernierJourNutritionEvalue = iso;
   sauvegarderEtatHero(etatHero);
-  return score;
+  return etatHero.compteurs.streakNutritionJours;
 }
 
 // Façade nommée comme les points d'intégration de la spec.
