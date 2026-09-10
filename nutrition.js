@@ -99,6 +99,10 @@ function animateNumber(el, from, to, dur){
 }
 
 function renderNutrition(){
+  // Placé ici pour couvrir aussi le passage automatique de minuit, qui
+  // re-rend cette vue. Sans jour en attente, l'appel ne fait rien.
+  cloturerJoursNutrition();
+
   const iso = state.viewDate;
   const isToday = iso === todayISO();
   document.getElementById("dayTitle").textContent = isToday ? "Aujourd'hui" : formatShortFR(iso);
