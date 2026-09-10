@@ -281,7 +281,7 @@ function bonusXPCollier(etat) {
   return calculerStats(etat).bonusXP;   // déjà plafonné à 0,15
 }
 
-function calculerXPSeance(seance, etat, scoreNutritionDuJour) {
+function calculerXPSeance(seance, etat, evalNutritionDuJour) {
   const { baseSeance, diviseurVolume, bonusPR } = CONFIG.xp;
 
   const volume = seance.exercices.reduce((t, ex) =>
@@ -289,10 +289,7 @@ function calculerXPSeance(seance, etat, scoreNutritionDuJour) {
 
   const brut = baseSeance + volume / diviseurVolume + seance.nbPR * bonusPR;
 
-  const multNutrition = scoreNutritionDuJour === null
-    ? 1                                      // rien loggé = strictement neutre
-    : 1 + CONFIG.nutrition.boostXPMax * (scoreNutritionDuJour / 100);
-
+  const multNutrition = multiplicateurNutritionDuJour(etat, evalNutritionDuJour);
   const multMoral  = multiplicateurMoral(etat.moral);
   const multStreak = Math.min(
     1 + CONFIG.streak.bonusParSemaine * etat.compteurs.streakSemaines,
