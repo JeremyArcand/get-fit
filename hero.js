@@ -402,6 +402,12 @@ function evaluerJourNutrition(totaux, cibles, iso) {
 const HERO = {
   gagnerXP: gagnerXP,
   ajusterMoral: ajusterMoralHero,
+  evaluerJourNutrition: evaluerJourNutrition,
+  dernierJourNutritionEvalue: function () { return etatHero.compteurs.dernierJourNutritionEvalue; },
+  marquerJourNutritionEvalue: function (iso) {
+    etatHero.compteurs.dernierJourNutritionEvalue = iso;
+    sauvegarderEtatHero(etatHero);
+  },
   etat: function () { return etatHero; },
   stats: function () { return calculerStats(etatHero); }
 };
