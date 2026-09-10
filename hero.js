@@ -10,6 +10,226 @@
      via une vraie séance loggée dans workout.js.
    ================================================================ */
 
+/* ================================================================
+   SYSTÈME "MON HÉROS" (refonte) — ÉTAPE 1
+
+   Constantes issues du classeur de balance et fonctions de calcul
+   pures : aucune ne touche au DOM ni au localStorage, elles prennent
+   un état et retournent une valeur.
+
+   Ce bloc ne remplace pas encore le donjon actuel plus bas dans le
+   fichier ; rien ne l'appelle pour l'instant.
+   ================================================================ */
+
+const CONFIG = {
+  xp: {
+    baseSeance: 50,
+    diviseurVolume: 200,
+    bonusPR: 25,
+    courbeCoeff: 50,
+    courbeExposant: 1.5,
+    softCap: 25,
+    incrementApresCap: 200,
+    niveauMax: 50
+  },
+
+  stats: {
+    pvBase: 100,      pvParNiveau: 35,
+    atqBase: 10,      atqParNiveau: 6,
+    defBase: 5,       defParNiveau: 2.5,
+    critBase: 0.05,   critGainMax: 0.15,  critK: 20,
+    critMult: 1.75,
+    armureK: 80
+  },
+
+  nutrition: {
+    ptsCalories: 40,
+    ptsProteines: 40,
+    ptsEau: 20,
+    seuilReussite: 70,
+    toleranceCalories: 0.10,   // ±10 % de la cible
+    seuilProteines: 0.90,      // ≥ 90 % de la cible
+    seuilEau: 0.90,
+    boostXPMax: 0.25,
+    chanceParJourStreak: 2,
+    chanceMax: 30
+  },
+
+  moral: {
+    max: 100,
+    seance: 8,
+    jourNutritionReussi: 5,
+    jourNutritionRate: -6,
+    seanceManquee: -10,
+    multMin: 0.85,
+    seuilPlein: 80
+  },
+
+  streak: {
+    objectifSeancesSemaine: 4,
+    bonusParSemaine: 0.02,
+    bonusMax: 0.20
+  },
+
+  donjon: {
+    paliers: 10,
+    regenEntrePaliers: 0.25,
+    ennemiPvBase: 50,   ennemiPvExposant: 0.90,
+    ennemiAtqBase: 10,  ennemiAtqExposant: 0.80,
+    ennemiDefBase: 4,   ennemiDefExposant: 0.85,
+    croissanceParCycle: 0.20,
+    bossMultPv: 2.2,
+    bossMultAtq: 1.5,
+    toursMax: 200               // garde-fou anti-boucle infinie
+  },
+
+  economie: {
+    orParPalier: 10,
+    bonusOrParCycle: 0.10,
+    essenceParPalier: 1,
+    essenceBoss: 5,
+    coutCoffre: 3000,
+    coutAmeliorationEssence: 40,
+    facteurCoutEssence: 1.35,
+    gemmesBaseParNiveau: 3,
+    gemmesBonusPar5Niveaux: 1
+  },
+
+  loot: {
+    tauxDrop: 0.10,
+    poids: { commun: 70, rare: 22, ultraRare: 6.5, mythique: 1.4, legendaire: 0.1 },
+    effetChance: 0.01,
+    pityDouxDebut: 40,
+    pityDouxIncrement: 0.03,
+    pityDur: 60
+  },
+
+  equipement: {
+    puissanceBase: 6,
+    puissanceParPalier: 4,
+    multRarete: { commun: 1.00, rare: 1.60, ultraRare: 2.60, mythique: 4.20, legendaire: 6.80 },
+    gainParForge: 0.08,
+    forgeMax: 10,
+    coutForgeBase: 5,
+    facteurCoutForge: 1.22
+  },
+
+  fusion: {
+    objetsRequis: 3,
+    chanceSautDoubleParPoint: 0.005,
+    coutOrBase: 200,
+    facteurCoutOr: 3
+  },
+
+  vente: { coefficientPrix: 1.5 },
+
+  descentes: {
+    parJour: 1,
+    bonusParSeance: 1,
+    maxAccumulees: 5
+  }
+};
+
+const RARETES = ['commun', 'rare', 'ultraRare', 'mythique', 'legendaire'];
+const SLOTS   = ['arme', 'casque', 'plastron', 'jambieres', 'bague', 'collier'];
+
+// Chaque objet a une puissance unique ; le slot décide de ce qu'elle devient.
+const PROFILS_SLOT = {
+  arme:      { atq: 0.85, crit: 0.00010 },
+  casque:    { pv: 1.40,  def: 0.08 },
+  plastron:  { pv: 2.20,  def: 0.17 },
+  jambieres: { pv: 1.20,  def: 0.25 },
+  bague:     { atq: 0.15, crit: 0.00025 },
+  collier:   { chance: 0.10, bonusXP: 0.0004 }
+};
+
+const BONUS_XP_COLLIER_MAX = 0.15;
+
+/* ---------------- Courbe d'XP ---------------- */
+function xpRequisPourNiveau(niveau) {
+  if (niveau <= 1) return 0;
+  const L = niveau - 1;
+  const { courbeCoeff: c, courbeExposant: e, softCap, incrementApresCap } = CONFIG.xp;
+  return L <= softCap
+    ? Math.round(c * Math.pow(L, e))
+    : Math.round(c * Math.pow(softCap, e) + incrementApresCap * (L - softCap));
+}
+
+// XP cumulée nécessaire pour atteindre chaque niveau, calculée une seule
+// fois : niveauDepuisXP() est appelée à chaque rendu.
+function construireTableXP() {
+  const table = [0];
+  let cumul = 0;
+  for (let n = 1; n <= CONFIG.xp.niveauMax; n++) {
+    cumul += xpRequisPourNiveau(n);
+    table[n] = cumul;
+  }
+  return table;
+}
+const TABLE_XP = construireTableXP();
+
+function niveauDepuisXP(xpTotal) {
+  for (let n = CONFIG.xp.niveauMax; n >= 1; n--) {
+    if (xpTotal >= TABLE_XP[n]) return n;
+  }
+  return 1;
+}
+
+/* ---------------- Stats effectives ---------------- */
+function trouverObjet(etat, id) {
+  if (!id || !etat.inventaire) return null;
+  return etat.inventaire.find(function (o) { return o.id === id; }) || null;
+}
+
+function puissanceObjet(o) {
+  const e = CONFIG.equipement;
+  return (e.puissanceBase + e.puissanceParPalier * o.palier)
+       * e.multRarete[o.rarete]
+       * Math.pow(1 + CONFIG.donjon.croissanceParCycle, o.cycle - 1)
+       * (1 + e.gainParForge * o.forge);
+}
+
+// Points de Chance gagnés par la série de jours de nutrition réussis.
+function chanceDepuisNutrition(etat) {
+  const n = CONFIG.nutrition;
+  const jours = (etat.compteurs && etat.compteurs.streakNutritionJours) || 0;
+  return Math.min(jours * n.chanceParJourStreak, n.chanceMax);
+}
+
+function calculerStats(etat) {
+  const niveau = niveauDepuisXP(etat.xpTotal);
+  const s = CONFIG.stats;
+
+  const stats = {
+    niveau: niveau,
+    pv:     s.pvBase  + s.pvParNiveau  * (niveau - 1),
+    atq:    s.atqBase + s.atqParNiveau * (niveau - 1),
+    def:    s.defBase + s.defParNiveau * (niveau - 1),
+    crit:   s.critBase + s.critGainMax * (niveau / (niveau + s.critK)),
+    chance: 0,
+    bonusXP: 0
+  };
+
+  const equipe = etat.equipe || {};
+  for (const slot of SLOTS) {
+    const objet = trouverObjet(etat, equipe[slot]);
+    if (!objet) continue;
+    const p = puissanceObjet(objet);
+    for (const [stat, coeff] of Object.entries(PROFILS_SLOT[slot])) {
+      stats[stat] += p * coeff;
+    }
+  }
+
+  stats.chance += chanceDepuisNutrition(etat);
+  // Sans ce plafond, le collier finirait par écraser l'apport de la nutrition.
+  stats.bonusXP = Math.min(stats.bonusXP, BONUS_XP_COLLIER_MAX);
+  return stats;
+}
+
+/* ================================================================
+   SYSTÈME DE DONJON ACTUEL (Phases 1 à 3) — inchangé pour l'instant
+   ================================================================ */
+
 const DUNGEON_TICK_SECONDS = 1;
 const BOSS_TIME_LIMIT_SECONDS = 60;
 const MAX_OFFLINE_SECONDS = 1800; // 30 min de rattrapage maximum
