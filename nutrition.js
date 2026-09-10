@@ -40,6 +40,18 @@ function dayTotals(iso){
   return totals;
 }
 
+// Score nutritionnel d'une journée pour le système Mon Héros.
+// Retourne null si rien n'a été loggé ce jour-là : c'est neutre, pas un échec.
+function scoreNutritionDuJour(iso){
+  const items = state.nutri.foodLog.filter(function(it){ return it.date === iso; });
+  if(items.length === 0) return null;
+  const totaux = dayTotals(iso);
+  return calculerScoreNutrition(
+    { calories: totaux.cal, proteines: totaux.protein, eau: state.nutri.waterLog[iso] || 0 },
+    { calories: TARGETS.cal, proteines: TARGETS.protein, eau: TARGETS.water }
+  );
+}
+
 function animateNumber(el, from, to, dur){
   const start = performance.now();
   from = Math.round(from); to = Math.round(to);
