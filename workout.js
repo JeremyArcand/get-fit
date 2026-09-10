@@ -527,7 +527,7 @@ document.getElementById("finishSessionBtn").addEventListener("click", function()
     }),
     nbPR: beaten.length
   };
-  HERO.gagnerXP(seance, scoreNutritionDuJour(session.date));
+  HERO.gagnerXP(seance, evalNutritionDuJour(session.date));
   HERO.ajusterMoral(CONFIG.moral.seance);
 });
 
