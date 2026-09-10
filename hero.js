@@ -226,6 +226,156 @@ function calculerStats(etat) {
   return stats;
 }
 
+/* ---------------- Moral ---------------- */
+function multiplicateurMoral(moral) {
+  const { multMin, seuilPlein } = CONFIG.moral;
+  return multMin + (1 - multMin) * Math.min(moral, seuilPlein) / seuilPlein;
+}
+
+function ajusterMoral(etat, delta) {
+  etat.moral = Math.max(0, Math.min(CONFIG.moral.max, etat.moral + delta));
+}
+
+/* ---------------- Score nutritionnel ---------------- */
+// Une journée sans aucun aliment loggé doit retourner null (neutre), jamais 0
+// (qui, lui, déclenche la pénalité de moral). L'appelant s'en charge.
+function calculerScoreNutrition(totaux, cibles) {
+  const n = CONFIG.nutrition;
+  let score = 0;
+  if (Math.abs(totaux.calories - cibles.calories) <= cibles.calories * n.toleranceCalories)
+    score += n.ptsCalories;
+  if (totaux.proteines >= cibles.proteines * n.seuilProteines) score += n.ptsProteines;
+  if (totaux.eau >= cibles.eau * n.seuilEau) score += n.ptsEau;
+  return score;
+}
+
+/* ---------------- XP d'une séance ---------------- */
+function bonusXPCollier(etat) {
+  return calculerStats(etat).bonusXP;   // déjà plafonné à 0,15
+}
+
+function calculerXPSeance(seance, etat, scoreNutritionDuJour) {
+  const { baseSeance, diviseurVolume, bonusPR } = CONFIG.xp;
+
+  const volume = seance.exercices.reduce((t, ex) =>
+    t + ex.series.reduce((s, serie) => s + serie.poids * serie.reps, 0), 0);
+
+  const brut = baseSeance + volume / diviseurVolume + seance.nbPR * bonusPR;
+
+  const multNutrition = scoreNutritionDuJour === null
+    ? 1                                      // rien loggé = strictement neutre
+    : 1 + CONFIG.nutrition.boostXPMax * (scoreNutritionDuJour / 100);
+
+  const multMoral  = multiplicateurMoral(etat.moral);
+  const multStreak = Math.min(
+    1 + CONFIG.streak.bonusParSemaine * etat.compteurs.streakSemaines,
+    1 + CONFIG.streak.bonusMax
+  );
+  const multCollier = 1 + bonusXPCollier(etat);
+
+  return {
+    brut: Math.round(brut),
+    final: Math.round(brut * multNutrition * multMoral * multStreak * multCollier),
+    detail: { volume, multNutrition, multMoral, multStreak, multCollier }
+  };
+}
+
+// Gemmes accordées en atteignant un niveau (colonne « Gemmes gagnées » du classeur).
+function gemmesPourNiveau(niveau) {
+  const e = CONFIG.economie;
+  return e.gemmesBaseParNiveau + Math.floor(niveau / 5) * e.gemmesBonusPar5Niveaux;
+}
+
+/* ---------------- État du nouveau système ---------------- */
+const CLE_SAUVEGARDE = 'getfit_hero_v1';
+
+function etatInitialHero() {
+  return {
+    version: 1,
+    xpTotal: 0,
+    moral: CONFIG.moral.max,
+    or: 0,
+    essence: 0,
+    gemmes: 0,
+    ameliorationsEssence: 0,
+    equipe: { arme: null, casque: null, plastron: null, jambieres: null, bague: null, collier: null },
+    inventaire: [],
+    donjon: { cycle: 1, palierAtteint: 0, descentesDisponibles: 1, derniereDescente: null },
+    compteurs: {
+      pityLegendaire: 0,
+      streakSemaines: 0,
+      streakNutritionJours: 0,
+      seancesSemaineCourante: 0,
+      semaineCourante: null
+    },
+    journal: []
+  };
+}
+
+// Chaque changement de structure ajoutera un bloc ici, jamais une réécriture.
+function migrerEtatHero(etat) {
+  if (!etat.version) etat.version = 1;
+  return etat;
+}
+
+function chargerEtatHero() {
+  let brut = null;
+  try { brut = localStorage.getItem(CLE_SAUVEGARDE); } catch (e) { brut = null; }
+  if (!brut) return etatInitialHero();
+  try {
+    return migrerEtatHero(JSON.parse(brut));
+  } catch (e) {
+    return etatInitialHero();
+  }
+}
+
+function sauvegarderEtatHero(etat) {
+  try { localStorage.setItem(CLE_SAUVEGARDE, JSON.stringify(etat)); } catch (e) {}
+}
+
+let etatHero = chargerEtatHero();
+
+/* ---------------- Point d'entrée appelé par workout.js ---------------- */
+// Retourne le gain complet (et pas juste un nombre) : l'interface a besoin du
+// niveau avant/après, des gemmes et du détail des multiplicateurs.
+function gagnerXP(seance, scoreNutritionDuJour) {
+  const score = scoreNutritionDuJour === undefined ? null : scoreNutritionDuJour;
+  const niveauAvant = niveauDepuisXP(etatHero.xpTotal);
+
+  const gain = calculerXPSeance(seance, etatHero, score);
+  etatHero.xpTotal += gain.final;
+
+  const niveauApres = niveauDepuisXP(etatHero.xpTotal);
+  let gemmesGagnees = 0;
+  for (let n = niveauAvant + 1; n <= niveauApres; n++) gemmesGagnees += gemmesPourNiveau(n);
+  etatHero.gemmes += gemmesGagnees;
+
+  sauvegarderEtatHero(etatHero);
+
+  return {
+    brut: gain.brut,
+    final: gain.final,
+    detail: gain.detail,
+    niveauAvant: niveauAvant,
+    niveauApres: niveauApres,
+    gemmesGagnees: gemmesGagnees
+  };
+}
+
+function ajusterMoralHero(delta) {
+  ajusterMoral(etatHero, delta);
+  sauvegarderEtatHero(etatHero);
+  return etatHero.moral;
+}
+
+// Façade nommée comme les points d'intégration de la spec.
+const HERO = {
+  gagnerXP: gagnerXP,
+  ajusterMoral: ajusterMoralHero,
+  etat: function () { return etatHero; },
+  stats: function () { return calculerStats(etatHero); }
+};
+
 /* ================================================================
    SYSTÈME DE DONJON ACTUEL (Phases 1 à 3) — inchangé pour l'instant
    ================================================================ */
