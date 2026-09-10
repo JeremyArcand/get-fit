@@ -234,17 +234,46 @@ function ajusterMoral(etat, delta) {
   etat.moral = Math.max(0, Math.min(CONFIG.moral.max, etat.moral + delta));
 }
 
-/* ---------------- Score nutritionnel ---------------- */
-// Une journée sans aucun aliment loggé doit retourner null (neutre), jamais 0
-// (qui, lui, déclenche la pénalité de moral). L'appelant s'en charge.
-function calculerScoreNutrition(totaux, cibles) {
+/* ---------------- Nutrition : bonus pur, jamais de pénalité ---------------- */
+// Trois cibles indépendantes. Aucune ne peut faire descendre le multiplicateur
+// sous 1,00. Rien loggé retourne null, et non un objet rempli de false : ce
+// null court-circuite tout calcul de bonus.
+function evaluerJourNutrition(totaux, cibles) {
+  if (totaux === null || totaux === undefined) return null;
+
   const n = CONFIG.nutrition;
-  let score = 0;
-  if (Math.abs(totaux.calories - cibles.calories) <= cibles.calories * n.toleranceCalories)
-    score += n.ptsCalories;
-  if (totaux.proteines >= cibles.proteines * n.seuilProteines) score += n.ptsProteines;
-  if (totaux.eau >= cibles.eau * n.seuilEau) score += n.ptsEau;
-  return score;
+  const calOk  = Math.abs(totaux.calories - cibles.calories) <= cibles.calories * n.toleranceCalories;
+  const protOk = totaux.proteines >= cibles.proteines * n.seuilProteines;
+  const eauOk  = totaux.eau >= cibles.eau * n.seuilEau;
+  const nbCibles = [calOk, protOk, eauOk].filter(Boolean).length;
+
+  const bonusJour = (calOk ? n.bonusCalories : 0)
+                  + (protOk ? n.bonusProteines : 0)
+                  + (eauOk ? n.bonusEau : 0);
+
+  return { calOk, protOk, eauOk, nbCibles, compteSerie: nbCibles >= 2, bonusJour };
+}
+
+// Un jour compte pour la série dès 2 cibles sur 3. En dessous — ou non loggé —
+// la série retombe à zéro, sans jamais faire passer le multiplicateur sous 1.
+function mettreAJourSerieNutrition(etat, evalJour) {
+  if (evalJour === null) {
+    etat.compteurs.streakNutritionJours = 0;
+    return;
+  }
+  etat.compteurs.streakNutritionJours = evalJour.compteSerie
+    ? etat.compteurs.streakNutritionJours + 1
+    : 0;
+}
+
+function bonusSerieNutrition(etat) {
+  const n = CONFIG.nutrition;
+  return Math.min(etat.compteurs.streakNutritionJours * n.bonusSerieParJour, n.bonusSerieMax);
+}
+
+function multiplicateurNutritionDuJour(etat, evalJour) {
+  if (evalJour === null || evalJour === undefined) return 1;   // neutre, aucun calcul
+  return 1 + evalJour.bonusJour + bonusSerieNutrition(etat);
 }
 
 /* ---------------- XP d'une séance ---------------- */
