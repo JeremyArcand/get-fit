@@ -43,24 +43,22 @@ const CONFIG = {
   },
 
   nutrition: {
-    ptsCalories: 40,
-    ptsProteines: 40,
-    ptsEau: 20,
-    seuilReussite: 70,
     toleranceCalories: 0.10,   // ±10 % de la cible
     seuilProteines: 0.90,      // ≥ 90 % de la cible
     seuilEau: 0.90,
-    boostXPMax: 0.25,
-    chanceParJourStreak: 2,
+    bonusCalories: 0.05,       // indépendant — s'ajoute si cette cible précise est atteinte
+    bonusProteines: 0.08,      // le plus élevé : cohérent avec un style riche en protéines
+    bonusEau: 0.04,
+    bonusSerieParJour: 0.01,   // par jour PARFAIT consécutif (les 3 cibles le même jour)
+    bonusSerieMax: 0.15,       // plafond à 15 jours de série
+    chanceParJourStreak: 2,    // même compteur de série que le bonus XP
     chanceMax: 30
   },
 
   moral: {
     max: 100,
     seance: 8,
-    jourNutritionReussi: 5,
-    jourNutritionRate: -6,
-    seanceManquee: -10,
+    seanceManquee: -10,        // SEULE source de pénalité. La nutrition n'affecte jamais le moral.
     multMin: 0.85,
     seuilPlein: 80
   },

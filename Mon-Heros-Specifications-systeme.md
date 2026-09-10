@@ -51,24 +51,22 @@ const CONFIG = {
   },
 
   nutrition: {
-    ptsCalories: 40,
-    ptsProteines: 40,
-    ptsEau: 20,
-    seuilReussite: 70,
     toleranceCalories: 0.10,   // ±10 % de la cible
     seuilProteines: 0.90,      // ≥ 90 % de la cible
     seuilEau: 0.90,
-    boostXPMax: 0.25,
-    chanceParJourStreak: 2,
+    bonusCalories: 0.05,       // indépendant — s'ajoute si cette cible précise est atteinte
+    bonusProteines: 0.08,      // le plus élevé : cohérent avec un style riche en protéines
+    bonusEau: 0.04,
+    bonusSerieParJour: 0.01,   // par jour PARFAIT consécutif (les 3 cibles le même jour)
+    bonusSerieMax: 0.15,       // plafond à 15 jours de série
+    chanceParJourStreak: 2,    // même compteur de série que le bonus XP
     chanceMax: 30
   },
 
   moral: {
     max: 100,
     seance: 8,
-    jourNutritionReussi: 5,
-    jourNutritionRate: -6,
-    seanceManquee: -10,
+    seanceManquee: -10,        // SEULE source de pénalité. La nutrition n'affecte jamais le moral.
     multMin: 0.85,
     seuilPlein: 80
   },
@@ -257,7 +255,7 @@ function niveauDepuisXP(xpTotal) {
 ### Gain d'XP d'une séance
 
 ```js
-function calculerXPSeance(seance, etat, scoreNutritionDuJour) {
+function calculerXPSeance(seance, etat, evalNutritionDuJour) {
   const { baseSeance, diviseurVolume, bonusPR } = CONFIG.xp;
 
   const volume = seance.exercices.reduce((t, ex) =>
@@ -265,10 +263,7 @@ function calculerXPSeance(seance, etat, scoreNutritionDuJour) {
 
   const brut = baseSeance + volume / diviseurVolume + seance.nbPR * bonusPR;
 
-  const multNutrition = scoreNutritionDuJour === null
-    ? 1                                      // rien loggé = strictement neutre
-    : 1 + CONFIG.nutrition.boostXPMax * (scoreNutritionDuJour / 100);
-
+  const multNutrition = multiplicateurNutritionDuJour(etat, evalNutritionDuJour);
   const multMoral  = multiplicateurMoral(etat.moral);
   const multStreak = Math.min(
     1 + CONFIG.streak.bonusParSemaine * etat.compteurs.streakSemaines,
@@ -301,21 +296,61 @@ function ajusterMoral(etat, delta) {
 
 Le moral ne descend jamais sous 0 ni au-dessus de 100. Aucun autre chemin ne doit le modifier.
 
-### Score nutritionnel
+### Nutrition — bonus pur, jamais de pénalité
+
+Trois cibles indépendantes. Chacune ajoute son propre bonus si elle est atteinte ce jour-là ; aucune ne peut jamais rendre le multiplicateur inférieur à 1,00.
 
 ```js
-function calculerScoreNutrition(totaux, cibles) {
+function evaluerJourNutrition(totaux, cibles) {
+  if (totaux === null) return null;   // rien loggé = neutre, pas de calcul du tout
+
   const n = CONFIG.nutrition;
-  let score = 0;
-  if (Math.abs(totaux.calories - cibles.calories) <= cibles.calories * n.toleranceCalories)
-    score += n.ptsCalories;
-  if (totaux.proteines >= cibles.proteines * n.seuilProteines) score += n.ptsProteines;
-  if (totaux.eau >= cibles.eau * n.seuilEau) score += n.ptsEau;
-  return score;
+  const calOk  = Math.abs(totaux.calories - cibles.calories) <= cibles.calories * n.toleranceCalories;
+  const protOk = totaux.proteines >= cibles.proteines * n.seuilProteines;
+  const eauOk  = totaux.eau >= cibles.eau * n.seuilEau;
+  const nbCibles = [calOk, protOk, eauOk].filter(Boolean).length;
+
+  const bonusJour = (calOk ? n.bonusCalories : 0)
+                   + (protOk ? n.bonusProteines : 0)
+                   + (eauOk ? n.bonusEau : 0);
+
+  return { calOk, protOk, eauOk, nbCibles, compteSerie: nbCibles >= 2, bonusJour };
 }
 ```
 
-**Règle critique :** une journée sans aucun aliment loggé retourne `null`, pas `0`. Un score de 0 déclenche la pénalité de moral ; `null` est neutre. C'est toute la différence entre « la nutrition est optionnelle » et « la nutrition est obligatoire ». À ne pas confondre dans le code.
+**Règle critique :** une journée sans aucun aliment loggé retourne `null`, pas un objet avec des `false` partout. `null` court-circuite tout calcul de bonus ET ne touche jamais à la série. C'est toute la différence entre « la nutrition est optionnelle » et « la nutrition est pénalisante par absence ». À ne pas confondre dans le code — un piège facile est de faire `totaux || {calories: 0, ...}` quelque part en amont, ce qui transformerait silencieusement `null` en un jour raté.
+
+### Série nutritionnelle (2 cibles ou plus, jours consécutifs)
+
+Un jour compte pour la série dès que **2 des 3 cibles** sont atteintes — pas besoin des trois. Un jour sous ce seuil, y compris un jour non loggé, la casse à zéro, mais ne fait jamais reculer le multiplicateur sous 1,00.
+
+```js
+function mettreAJourSerieNutrition(etat, evalJour) {
+  if (evalJour === null) {
+    etat.compteurs.streakNutritionJours = 0;      // rien loggé casse la série
+    return;
+  }
+  etat.compteurs.streakNutritionJours = evalJour.compteSerie
+    ? etat.compteurs.streakNutritionJours + 1
+    : 0;                                           // moins de 2 cibles casse la série
+}
+
+function bonusSerieNutrition(etat) {
+  const n = CONFIG.nutrition;
+  return Math.min(etat.compteurs.streakNutritionJours * n.bonusSerieParJour, n.bonusSerieMax);
+}
+```
+
+Le multiplicateur du jour combine les deux :
+
+```js
+function multiplicateurNutritionDuJour(etat, evalJour) {
+  if (evalJour === null) return 1;   // neutre, aucun calcul
+  return 1 + evalJour.bonusJour + bonusSerieNutrition(etat);
+}
+```
+
+À 15 jours de série et une journée où 2 cibles sont atteintes (calories + protéines, par exemple) : `1 + 0,13 + 0,15 = 1,28`, soit +28 % d'XP sur la séance. Avec les 3 cibles le même jour, jusqu'à `1 + 0,17 + 0,15 = 1,32`.
 
 ### Stats effectives
 
@@ -596,7 +631,8 @@ HERO.ajusterMoral(CONFIG.moral.seance);
 HERO.crediterDescente(CONFIG.descentes.bonusParSeance);
 
 // nutrition.js — à la clôture d'une journée
-const score = HERO.evaluerJourNutrition(totaux, cibles);  // null si rien loggé
+const evalJour = HERO.evaluerJourNutrition(totaux, cibles);  // null si rien loggé
+HERO.mettreAJourSerieNutrition(evalJour);
 ```
 
 `gagnerXP()` doit retourner l'objet complet du gain, pas juste un nombre : l'interface a besoin du niveau avant/après, des gemmes gagnées et du détail des multiplicateurs pour animer la montée de niveau.
