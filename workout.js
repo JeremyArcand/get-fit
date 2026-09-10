@@ -514,6 +514,21 @@ document.getElementById("finishSessionBtn").addEventListener("click", function()
   // Seule porte d'entrée vers la progression du héros : une séance finalisée.
   // hero.js affiche le message final, record inclus.
   onWorkoutCompleted(session, { hasPR: beaten.length > 0, prMessage: prMessage });
+
+  // Nouveau système Mon Héros. hero.js ignore la structure de workout.js :
+  // on traduit ici vers le contrat de la spec (exercices / series / poids).
+  const seance = {
+    exercices: session.exercises.map(function(ex){
+      return {
+        series: ex.sets.map(function(s){
+          return { poids: Number(s.weight) || 0, reps: Number(s.reps) || 0 };
+        })
+      };
+    }),
+    nbPR: beaten.length
+  };
+  HERO.gagnerXP(seance, scoreNutritionDuJour(session.date));
+  HERO.ajusterMoral(CONFIG.moral.seance);
 });
 
 function sessionSetCount(session){
