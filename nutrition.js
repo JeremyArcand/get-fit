@@ -58,20 +58,21 @@ function totauxNutritionDuJour(iso){
   };
 }
 
-function scoreNutritionDuJour(iso){
-  const totaux = totauxNutritionDuJour(iso);
-  return totaux === null ? null : calculerScoreNutrition(totaux, ciblesNutrition());
+// Évaluation d'une journée : { calOk, protOk, eauOk, nbCibles, compteSerie,
+// bonusJour } ou null si rien n'a été loggé.
+function evalNutritionDuJour(iso){
+  return HERO.evaluerJourNutrition(totauxNutritionDuJour(iso), ciblesNutrition());
 }
 
 // Clôture les journées écoulées pas encore évaluées. Jamais aujourd'hui : la
 // journée n'est pas finie. Le marqueur garantit qu'un jour ne compte qu'une
-// fois, sinon le moral se cumulerait à chaque rechargement de la page.
+// fois, sinon la série se gonflerait à chaque rechargement de la page.
 function cloturerJoursNutrition(){
   const hier = addDaysISO(todayISO(), -1);
   const dernier = HERO.dernierJourNutritionEvalue();
 
-  // Première clôture : on ne remonte pas dans l'historique pour distribuer
-  // rétroactivement des pénalités, on démarre à partir de maintenant.
+  // Première clôture : on ne remonte pas dans l'historique, la série
+  // démarrerait sur des journées jamais suivies.
   if(!dernier){
     HERO.marquerJourNutritionEvalue(hier);
     return;
@@ -80,7 +81,7 @@ function cloturerJoursNutrition(){
   let jour = addDaysISO(dernier, 1);
   let garde = 0;
   while(jour <= hier && garde++ < 400){
-    HERO.evaluerJourNutrition(totauxNutritionDuJour(jour), ciblesNutrition(), jour);
+    HERO.cloturerJourNutrition(evalNutritionDuJour(jour), jour);
     jour = addDaysISO(jour, 1);
   }
 }
