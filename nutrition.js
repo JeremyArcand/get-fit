@@ -40,16 +40,49 @@ function dayTotals(iso){
   return totals;
 }
 
-// Score nutritionnel d'une journée pour le système Mon Héros.
-// Retourne null si rien n'a été loggé ce jour-là : c'est neutre, pas un échec.
-function scoreNutritionDuJour(iso){
+/* ================= PONT VERS MON HÉROS ================= */
+function ciblesNutrition(){
+  return { calories: TARGETS.cal, proteines: TARGETS.protein, eau: TARGETS.water };
+}
+
+// null = aucun aliment loggé ce jour-là. L'eau seule ne suffit pas : sans
+// calories ni protéines, il n'y a rien à juger.
+function totauxNutritionDuJour(iso){
   const items = state.nutri.foodLog.filter(function(it){ return it.date === iso; });
   if(items.length === 0) return null;
   const totaux = dayTotals(iso);
-  return calculerScoreNutrition(
-    { calories: totaux.cal, proteines: totaux.protein, eau: state.nutri.waterLog[iso] || 0 },
-    { calories: TARGETS.cal, proteines: TARGETS.protein, eau: TARGETS.water }
-  );
+  return {
+    calories: totaux.cal,
+    proteines: totaux.protein,
+    eau: state.nutri.waterLog[iso] || 0
+  };
+}
+
+function scoreNutritionDuJour(iso){
+  const totaux = totauxNutritionDuJour(iso);
+  return totaux === null ? null : calculerScoreNutrition(totaux, ciblesNutrition());
+}
+
+// Clôture les journées écoulées pas encore évaluées. Jamais aujourd'hui : la
+// journée n'est pas finie. Le marqueur garantit qu'un jour ne compte qu'une
+// fois, sinon le moral se cumulerait à chaque rechargement de la page.
+function cloturerJoursNutrition(){
+  const hier = addDaysISO(todayISO(), -1);
+  const dernier = HERO.dernierJourNutritionEvalue();
+
+  // Première clôture : on ne remonte pas dans l'historique pour distribuer
+  // rétroactivement des pénalités, on démarre à partir de maintenant.
+  if(!dernier){
+    HERO.marquerJourNutritionEvalue(hier);
+    return;
+  }
+
+  let jour = addDaysISO(dernier, 1);
+  let garde = 0;
+  while(jour <= hier && garde++ < 400){
+    HERO.evaluerJourNutrition(totauxNutritionDuJour(jour), ciblesNutrition(), jour);
+    jour = addDaysISO(jour, 1);
+  }
 }
 
 function animateNumber(el, from, to, dur){
