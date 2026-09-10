@@ -306,7 +306,8 @@ function etatInitialHero() {
       streakSemaines: 0,
       streakNutritionJours: 0,
       seancesSemaineCourante: 0,
-      semaineCourante: null
+      semaineCourante: null,
+      dernierJourNutritionEvalue: null
     },
     journal: []
   };
@@ -315,6 +316,10 @@ function etatInitialHero() {
 // Chaque changement de structure ajoutera un bloc ici, jamais une réécriture.
 function migrerEtatHero(etat) {
   if (!etat.version) etat.version = 1;
+  if (!etat.compteurs) etat.compteurs = etatInitialHero().compteurs;
+  if (etat.compteurs.dernierJourNutritionEvalue === undefined) {
+    etat.compteurs.dernierJourNutritionEvalue = null;
+  }
   return etat;
 }
 
