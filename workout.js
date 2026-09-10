@@ -526,7 +526,7 @@ document.getElementById("finishSessionBtn").addEventListener("click", function()
   };
   const gain = HERO.gagnerXP(seance, evalNutritionDuJour(session.date));
   HERO.ajusterMoral(CONFIG.moral.seance);
-  HERO.crediterDescente(CONFIG.descentes.bonusParSeance);
+  HERO.crediterEnergie(CONFIG.energie.bonusParSeance);
 
   const heroParts = [];
   if(prMessage){ heroParts.push(prMessage); }
@@ -534,7 +534,7 @@ document.getElementById("finishSessionBtn").addEventListener("click", function()
   if(gain.niveauApres > gain.niveauAvant){
     heroParts.push("⭐ Niveau " + gain.niveauApres + (gain.gemmesGagnees > 0 ? " · +" + gain.gemmesGagnees + " 💎" : ""));
   }
-  heroParts.push("🗝️ +1 descente de donjon");
+  heroParts.push("⚡ +" + CONFIG.energie.bonusParSeance + " énergie");
   showToast(heroParts.join("  ·  "));
 });
 

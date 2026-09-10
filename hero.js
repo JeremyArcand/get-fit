@@ -71,7 +71,6 @@ const CONFIG = {
 
   donjon: {
     paliers: 10,
-    regenEntrePaliers: 0.25,
     ennemiPvBase: 50,   ennemiPvExposant: 0.90,
     ennemiAtqBase: 10,  ennemiAtqExposant: 0.80,
     ennemiDefBase: 4,   ennemiDefExposant: 0.85,
@@ -121,10 +120,17 @@ const CONFIG = {
 
   vente: { coefficientPrix: 1.5 },
 
-  descentes: {
-    parJour: 1,
-    bonusParSeance: 1,
-    maxAccumulees: 5
+  // Chaque palier se combat individuellement, payé en énergie plutôt qu'en
+  // « descentes » à la journée : ça laisse le joueur tenter sa chance aussi
+  // souvent que son énergie le permet, sans jamais dépasser ce que ses stats
+  // (donc son vrai entraînement) peuvent encaisser.
+  energie: {
+    base: 30,              // énergie max au niveau 1
+    parNiveau: 4,           // +4 d'énergie max par niveau
+    coutPalier: 5,
+    coutBoss: 10,
+    regenSecondes: 300,     // 1 point récupéré toutes les 5 minutes
+    bonusParSeance: 20      // recharge immédiate à chaque séance loggée
   }
 };
 
@@ -326,7 +332,10 @@ function etatInitialHero() {
     ameliorationsEssence: 0,
     equipe: { arme: null, casque: null, plastron: null, jambieres: null, bague: null, collier: null },
     inventaire: [],
-    donjon: { cycle: 1, palierAtteint: 0, descentesDisponibles: 1, derniereDescente: null },
+    donjon: { cycle: 1, palierActuel: 1 },
+    // Pleine au départ : un nouveau joueur peut tenter sa chance tout de
+    // suite, sans attendre la première recharge.
+    energie: { actuelle: CONFIG.energie.base, derniereMaj: Date.now() },
     compteurs: {
       pityLegendaire: 0,
       streakSemaines: 0,
@@ -362,9 +371,17 @@ function migrerEtatHero(etat) {
 
   if (!etat.donjon || typeof etat.donjon !== "object") etat.donjon = {};
   if (typeof etat.donjon.cycle !== "number") etat.donjon.cycle = defaut.donjon.cycle;
-  if (typeof etat.donjon.palierAtteint !== "number") etat.donjon.palierAtteint = defaut.donjon.palierAtteint;
-  if (typeof etat.donjon.descentesDisponibles !== "number") etat.donjon.descentesDisponibles = defaut.donjon.descentesDisponibles;
-  if (etat.donjon.derniereDescente === undefined) etat.donjon.derniereDescente = defaut.donjon.derniereDescente;
+  // Ancien champ (descentes atomiques) : palierAtteint partait de 0. Le
+  // nouveau palierActuel désigne le palier où se trouve le joueur, jamais 0.
+  if (typeof etat.donjon.palierActuel !== "number" || etat.donjon.palierActuel < 1) {
+    etat.donjon.palierActuel = (typeof etat.donjon.palierAtteint === "number" && etat.donjon.palierAtteint > 0)
+      ? etat.donjon.palierAtteint
+      : defaut.donjon.palierActuel;
+  }
+
+  if (!etat.energie || typeof etat.energie !== "object") etat.energie = {};
+  if (typeof etat.energie.actuelle !== "number") etat.energie.actuelle = defaut.energie.actuelle;
+  if (typeof etat.energie.derniereMaj !== "number") etat.energie.derniereMaj = Date.now();
 
   if (!etat.compteurs) etat.compteurs = {};
   if (typeof etat.compteurs.pityLegendaire !== "number") etat.compteurs.pityLegendaire = 0;
@@ -457,13 +474,11 @@ const HERO = {
   },
   etat: function () { return etatHero; },
   stats: function () { return calculerStats(etatHero); },
-  // Appelé par workout.js après chaque séance loggée : une descente de
-  // donjon de plus, cumulable jusqu'au plafond.
-  crediterDescente: function (n) {
-    etatHero.donjon.descentesDisponibles = Math.min(
-      CONFIG.descentes.maxAccumulees,
-      etatHero.donjon.descentesDisponibles + n
-    );
+  // Appelé par workout.js après chaque séance loggée : une recharge
+  // d'énergie immédiate, en plus de la régénération passive dans le temps.
+  crediterEnergie: function (n) {
+    recalculerEnergie(etatHero, Date.now());
+    etatHero.energie.actuelle = Math.min(energieMax(etatHero), etatHero.energie.actuelle + n);
     sauvegarderEtatHero(etatHero);
   },
   // Utilisé par le code de sauvegarde/restauration de shared.js.
@@ -633,109 +648,100 @@ function ameliorerEssence(etat) {
 }
 
 /* ================================================================
-   DESCENTES — une par jour + une par séance loggée, cumulables (spec 5).
+   ÉNERGIE — chaque palier se combat individuellement et coûte de
+   l'énergie ; elle se régénère passivement dans le temps, et une
+   séance loggée en recrédite un bloc immédiatement. Le vrai frein à la
+   progression reste le mur de difficulté du palier (stats du joueur),
+   pas l'énergie elle-même : elle règle la fréquence des tentatives,
+   pas la possibilité d'avancer sans s'entraîner.
    ================================================================ */
-function joursEcoules(iso1, iso2) {
-  if (!iso1) return 0;
-  return Math.round((fromISO(iso2) - fromISO(iso1)) / 86400000);
+function energieMax(etat) {
+  const niveau = niveauDepuisXP(etat.xpTotal);
+  const e = CONFIG.energie;
+  return Math.round(e.base + e.parNiveau * (niveau - 1));
 }
 
-// Crédit quotidien passif : appelé une fois à l'ouverture de l'onglet.
-function crediterDescentesQuotidiennes(etat, aujourdhui) {
-  if (!etat.donjon.derniereDescente) {
-    etat.donjon.derniereDescente = aujourdhui;
+// Recalcule l'énergie actuelle à partir du temps écoulé depuis la dernière
+// mise à jour, sans perdre le reste d'un point en cours de charge : seul le
+// temps correspondant aux points effectivement gagnés avance derniereMaj.
+function recalculerEnergie(etat, maintenant) {
+  const max = energieMax(etat);
+  if (etat.energie.actuelle >= max) {
+    etat.energie.actuelle = max;
+    etat.energie.derniereMaj = maintenant;
     return;
   }
-  const jours = joursEcoules(etat.donjon.derniereDescente, aujourdhui);
-  if (jours > 0) {
-    etat.donjon.descentesDisponibles = Math.min(
-      CONFIG.descentes.maxAccumulees,
-      etat.donjon.descentesDisponibles + jours * CONFIG.descentes.parJour
-    );
-    etat.donjon.derniereDescente = aujourdhui;
+  const regenMs = CONFIG.energie.regenSecondes * 1000;
+  const ecoule = maintenant - etat.energie.derniereMaj;
+  const pointsGagnes = Math.floor(ecoule / regenMs);
+  if (pointsGagnes > 0) {
+    etat.energie.actuelle = Math.min(max, etat.energie.actuelle + pointsGagnes);
+    etat.energie.derniereMaj += pointsGagnes * regenMs;
   }
+}
+
+function coutPalierActuel(etat) {
+  const boss = etat.donjon.palierActuel === CONFIG.donjon.paliers;
+  return boss ? CONFIG.energie.coutBoss : CONFIG.energie.coutPalier;
 }
 
 /* ================================================================
-   RÉSOLUTION D'UNE DESCENTE — déterministe sauf le loot (spec section 5).
-   Calcule les 10 paliers d'un coup ; chaque palier porte assez de détail
-   (ennemi, tours, dégâts, PV avant/après) pour être rejoué visuellement
-   palier par palier, coup par coup, par le moteur d'animation plus bas.
+   RÉSOLUTION D'UN PALIER — un seul combat déterministe (sauf le loot),
+   contre le palier où le joueur se trouve actuellement dans le cycle.
    ================================================================ */
-function resoudreDescente(etat) {
+function resoudrePalier(etat) {
   const stats = calculerStats(etat);
   const d = CONFIG.donjon;
   const cycle = etat.donjon.cycle;
+  const palier = etat.donjon.palierActuel;
+  const boss = palier === d.paliers;
   const croissance = Math.pow(1 + d.croissanceParCycle, cycle - 1);
 
-  let pv = stats.pv;
-  const resultat = {
-    paliers: [], reussie: false, or: 0, essence: 0, loot: [],
-    pvMax: Math.round(stats.pv), cycleDepart: cycle
+  const ennemi = {
+    pv: Math.round(d.ennemiPvBase * Math.pow(palier, d.ennemiPvExposant) * croissance * (boss ? d.bossMultPv : 1)),
+    atq: Math.round(d.ennemiAtqBase * Math.pow(palier, d.ennemiAtqExposant) * croissance * (boss ? d.bossMultAtq : 1)),
+    def: Math.round(d.ennemiDefBase * Math.pow(palier, d.ennemiDefExposant) * croissance)
   };
 
-  for (let palier = 1; palier <= d.paliers; palier++) {
-    const boss = palier === d.paliers;
+  const degatsInfliges = Math.max(1, stats.atq * (1 - ennemi.def / (ennemi.def + CONFIG.stats.armureK)));
+  const dps = degatsInfliges * (1 + stats.crit * (CONFIG.stats.critMult - 1));
+  const tours = Math.min(Math.ceil(ennemi.pv / dps), d.toursMax);
+  const subis = Math.max(1, ennemi.atq * (1 - stats.def / (stats.def + CONFIG.stats.armureK)));
 
-    const ennemi = {
-      pv: Math.round(d.ennemiPvBase * Math.pow(palier, d.ennemiPvExposant) * croissance * (boss ? d.bossMultPv : 1)),
-      atq: Math.round(d.ennemiAtqBase * Math.pow(palier, d.ennemiAtqExposant) * croissance * (boss ? d.bossMultAtq : 1)),
-      def: Math.round(d.ennemiDefBase * Math.pow(palier, d.ennemiDefExposant) * croissance)
-    };
+  // Le joueur frappe en premier : il n'encaisse que (tours - 1) ripostes.
+  const pvApres = stats.pv - subis * Math.max(0, tours - 1);
+  const reussi = pvApres > 0;
 
-    const degatsInfliges = Math.max(1, stats.atq * (1 - ennemi.def / (ennemi.def + CONFIG.stats.armureK)));
-    const dps = degatsInfliges * (1 + stats.crit * (CONFIG.stats.critMult - 1));
-    const tours = Math.min(Math.ceil(ennemi.pv / dps), d.toursMax);
-    const subis = Math.max(1, ennemi.atq * (1 - stats.def / (stats.def + CONFIG.stats.armureK)));
+  const resultat = {
+    palier: palier, boss: boss, cycle: cycle, ennemi: ennemi, tours: tours,
+    degats: Math.round(dps), subis: Math.round(subis),
+    pvJoueurAvant: Math.round(stats.pv), pvJoueurApres: Math.max(0, Math.round(pvApres)),
+    monstre: boss ? bossPourCycle(cycle) : monstrePourPalier(cycle, palier),
+    reussi: reussi, or: 0, essence: 0, objet: null
+  };
 
-    // Régénération AVANT le combat du palier, jamais après (sinon le boss
-    // profite d'une régénération qu'il n'a pas méritée).
-    if (palier > 1) pv = Math.min(stats.pv, pv + stats.pv * d.regenEntrePaliers);
-    const pvAvant = pv;
-    // Le joueur frappe en premier : il n'encaisse que (tours - 1) ripostes.
-    pv -= subis * Math.max(0, tours - 1);
-
-    const identite = boss ? bossPourCycle(cycle) : monstrePourPalier(cycle, palier);
-    const palierInfo = {
-      palier: palier, boss: boss, ennemi: ennemi, tours: tours,
-      degats: Math.round(dps), subis: Math.round(subis),
-      pvJoueurAvant: Math.round(pvAvant), monstre: identite
-    };
-
-    if (pv <= 0) {
-      palierInfo.reussi = false;
-      palierInfo.pvJoueurApres = 0;
-      resultat.paliers.push(palierInfo);
-      break;
-    }
-
-    palierInfo.reussi = true;
-    palierInfo.pvJoueurApres = Math.round(pv);
-    resultat.paliers.push(palierInfo);
-
-    resultat.or += Math.round(CONFIG.economie.orParPalier * palier * (1 + CONFIG.economie.bonusOrParCycle * (cycle - 1)));
-    resultat.essence += CONFIG.economie.essenceParPalier + (boss ? CONFIG.economie.essenceBoss : 0);
-
+  if (reussi) {
+    resultat.or = Math.round(CONFIG.economie.orParPalier * palier * (1 + CONFIG.economie.bonusOrParCycle * (cycle - 1)));
+    resultat.essence = CONFIG.economie.essenceParPalier + (boss ? CONFIG.economie.essenceBoss : 0);
     const objet = tenterDrop(etat, palier, cycle, stats.chance);
-    if (objet) { resultat.loot.push(objet); palierInfo.objet = objet; }
-
-    if (boss) resultat.reussie = true;
+    if (objet) resultat.objet = objet;
   }
   return resultat;
 }
 
-// Un échec ne coûte jamais les ressources déjà gagnées avant la chute.
-function appliquerDescente(etat, resultat) {
+// Un échec ne coûte que l'énergie déjà dépensée : le joueur reste au même
+// palier et peut retenter dès qu'il a de nouveau assez d'énergie.
+function appliquerPalier(etat, resultat) {
+  if (!resultat.reussi) return;
   etat.or += resultat.or;
   etat.essence += resultat.essence;
-  resultat.loot.forEach(function (o) { etat.inventaire.push(o); });
-  etat.donjon.descentesDisponibles = Math.max(0, etat.donjon.descentesDisponibles - 1);
+  if (resultat.objet) etat.inventaire.push(resultat.objet);
 
-  if (resultat.reussie) {
+  if (resultat.boss) {
     etat.donjon.cycle += 1;
-    etat.donjon.palierAtteint = 0;
+    etat.donjon.palierActuel = 1;
   } else {
-    etat.donjon.palierAtteint = 0;
+    etat.donjon.palierActuel += 1;
   }
 }
 
@@ -851,57 +857,61 @@ function playDeathParticles() {
 }
 
 /* ================================================================
-   MOTEUR D'ANIMATION — la descente est déjà entièrement résolue
-   (resoudreDescente est déterministe) ; ce moteur ne fait que rejouer
-   le résultat visuellement, palier par palier, coup par coup, au même
-   rythme que l'ancien donjon temps réel.
+   MOTEUR D'ANIMATION — un seul palier est résolu par combat (déjà
+   déterministe) ; ce moteur ne fait que le rejouer visuellement, coup
+   par coup, au même rythme que l'ancien donjon temps réel.
    ================================================================ */
 let animationEnCours = false;
-let journalDescentes = [];
+let journalCombats = [];
 const etatVisuel = {
   monstreNom: "—", monstreIcone: "👺", monstrePv: 0, monstrePvMax: 0,
   joueurPv: 0, joueurPvMax: 0, texte: "Le donjon t'attend…"
 };
 
-function lancerDescente() {
+// Aligne l'affichage au repos sur le palier où le joueur se trouve
+// réellement, pour qu'il voie ce qu'il va affronter avant de cliquer.
+function synchroniserVisuelAvecEtat() {
+  const d = etatHero.donjon;
+  const boss = d.palierActuel === CONFIG.donjon.paliers;
+  const identite = boss ? bossPourCycle(d.cycle) : monstrePourPalier(d.cycle, d.palierActuel);
+  const stats = calculerStats(etatHero);
+  etatVisuel.monstreNom = identite.nom;
+  etatVisuel.monstreIcone = identite.icone;
+  etatVisuel.monstrePvMax = 0;
+  etatVisuel.monstrePv = 0;
+  etatVisuel.joueurPvMax = Math.round(stats.pv);
+  etatVisuel.joueurPv = Math.round(stats.pv);
+}
+
+function combattre() {
   if (animationEnCours) return;
-  if (etatHero.donjon.descentesDisponibles <= 0) {
-    showToast("Aucune descente disponible : 1 par jour, +1 par séance loggée (max 5).");
+  recalculerEnergie(etatHero, Date.now());
+  const cout = coutPalierActuel(etatHero);
+  if (etatHero.energie.actuelle < cout) {
+    sauvegarderEtatHero(etatHero);
+    renderHero();
+    showToast("Pas assez d'énergie (" + Math.floor(etatHero.energie.actuelle) + "/" + cout + "). Elle se recharge avec le temps, ou entraîne-toi pour en regagner d'un coup.");
     return;
   }
-  const resultat = resoudreDescente(etatHero);
-  appliquerDescente(etatHero, resultat);
+  etatHero.energie.actuelle -= cout;
+  const resultat = resoudrePalier(etatHero);
+  appliquerPalier(etatHero, resultat);
   sauvegarderEtatHero(etatHero);
-  animerDescente(resultat);
+  animerPalier(resultat);
 }
 
-function animerDescente(resultat) {
+function animerPalier(p) {
   animationEnCours = true;
   preloadAttackFrames();
-  etatVisuel.joueurPvMax = resultat.pvMax;
-  renderHero();
 
-  let i = 0;
-  function paliersuivantOuFin(arreter) {
-    if (arreter || i >= resultat.paliers.length) {
-      terminerAnimation(resultat);
-      return;
-    }
-    const p = resultat.paliers[i];
-    i += 1;
-    animerPalier(p, paliersuivantOuFin);
-  }
-  paliersuivantOuFin(false);
-}
-
-function animerPalier(p, suite) {
   etatVisuel.monstreNom = p.monstre.nom;
   etatVisuel.monstreIcone = p.monstre.icone;
   etatVisuel.monstrePvMax = p.ennemi.pv;
   etatVisuel.monstrePv = p.ennemi.pv;
+  etatVisuel.joueurPvMax = p.pvJoueurAvant;
   etatVisuel.joueurPv = p.pvJoueurAvant;
   etatVisuel.texte = (p.boss ? "⚔️ Boss — " : "Palier " + p.palier + "/10 — ") + p.monstre.nom;
-  renderDonjon();
+  renderHero();
 
   let coup = 0;
   function prochainCoup() {
@@ -917,14 +927,14 @@ function animerPalier(p, suite) {
     renderDonjon();
 
     if (!p.reussi && etatVisuel.joueurPv <= 0) {
-      setTimeout(function () { suite(true); }, 500);
+      setTimeout(function () { terminerCombat(p); }, 500);
       return;
     }
     if (coup >= p.tours) {
       etatVisuel.monstrePv = 0;
       playDeathParticles();
       renderDonjon();
-      setTimeout(function () { suite(false); }, 350);
+      setTimeout(function () { terminerCombat(p); }, 350);
       return;
     }
     setTimeout(prochainCoup, DUNGEON_TICK_SECONDS * 1000);
@@ -932,17 +942,18 @@ function animerPalier(p, suite) {
   setTimeout(prochainCoup, DUNGEON_TICK_SECONDS * 1000);
 }
 
-function terminerAnimation(resultat) {
+function terminerCombat(resultat) {
   animationEnCours = false;
-  const dernier = resultat.paliers[resultat.paliers.length - 1];
-  const texte = resultat.reussie
-    ? "🏅 Cycle " + resultat.cycleDepart + " terminé ! +" + resultat.or + " or · +" + resultat.essence + " essence" +
-      (resultat.loot.length ? " · 🎁 " + resultat.loot.length + " objet" + (resultat.loot.length > 1 ? "s" : "") : "")
-    : "💀 Défaite au palier " + dernier.palier + "/10 · déjà acquis : +" + resultat.or + " or · +" + resultat.essence + " essence";
-  journalDescentes.unshift({ texte: texte, echec: !resultat.reussie });
-  journalDescentes = journalDescentes.slice(0, 5);
+  const texte = resultat.reussi
+    ? "✅ " + (resultat.boss ? "Boss vaincu — cycle " + resultat.cycle + " terminé !" : "Palier " + resultat.palier + "/10 nettoyé") +
+      " · +" + resultat.or + " or · +" + resultat.essence + " essence" +
+      (resultat.objet ? " · 🎁 " + itemDisplayName(resultat.objet) : "")
+    : "💀 " + (resultat.boss ? "Boss" : "Palier " + resultat.palier + "/10") + " non vaincu — retente dès que tu as de l'énergie";
+  journalCombats.unshift({ texte: texte, echec: !resultat.reussi });
+  journalCombats = journalCombats.slice(0, 5);
   etatVisuel.texte = texte;
   showToast(texte);
+  synchroniserVisuelAvecEtat();
   renderHero();
 }
 
@@ -993,8 +1004,14 @@ function renderHeroCharacter() {
 
 function renderDonjon() {
   const d = etatHero.donjon;
-  document.getElementById("dungeonRun").textContent = "Cycle " + d.cycle + " — " + nomCycle(d.cycle);
-  document.getElementById("dungeonDps").textContent = "Descentes : " + d.descentesDisponibles + " / " + CONFIG.descentes.maxAccumulees;
+  recalculerEnergie(etatHero, Date.now());
+  const max = energieMax(etatHero);
+  const boss = d.palierActuel === CONFIG.donjon.paliers;
+
+  document.getElementById("dungeonRun").textContent =
+    "Cycle " + d.cycle + " — " + (boss ? "⚔️ BOSS" : "Palier " + d.palierActuel + "/10");
+  document.getElementById("dungeonDps").textContent =
+    "⚡ " + Math.floor(etatHero.energie.actuelle) + " / " + max;
 
   document.getElementById("monsterEmoji").textContent = etatVisuel.monstreIcone;
   document.getElementById("monsterName").textContent = etatVisuel.monstreNom;
@@ -1010,11 +1027,12 @@ function renderDonjon() {
 
   document.getElementById("dungeonResult").textContent = etatVisuel.texte;
 
+  const cout = coutPalierActuel(etatHero);
   const btn = document.getElementById("descendreBtn");
-  btn.disabled = animationEnCours || d.descentesDisponibles <= 0;
-  btn.textContent = animationEnCours ? "Descente en cours…" : "Descendre";
+  btn.disabled = animationEnCours || etatHero.energie.actuelle < cout;
+  btn.textContent = animationEnCours ? "Combat en cours…" : "Combattre (⚡ " + cout + ")";
 
-  document.getElementById("dungeonLog").innerHTML = journalDescentes.map(function (l) {
+  document.getElementById("dungeonLog").innerHTML = journalCombats.map(function (l) {
     return '<div class="dungeon-log-line' + (l.echec ? " is-fail" : "") + '">' + escapeHtml(l.texte) + "</div>";
   }).join("");
 }
@@ -1113,7 +1131,7 @@ function renderTresor() {
 /* ================================================================
    INTERACTIONS
    ================================================================ */
-document.getElementById("descendreBtn").addEventListener("click", lancerDescente);
+document.getElementById("descendreBtn").addEventListener("click", combattre);
 
 document.getElementById("upgradeAtqBtn").addEventListener("click", function () {
   try {
@@ -1215,9 +1233,19 @@ document.getElementById("heroName").addEventListener("blur", function (e) {
    ENTRÉE DANS L'ONGLET
    ================================================================ */
 function showHeroView() {
-  crediterDescentesQuotidiennes(etatHero, todayISO());
+  recalculerEnergie(etatHero, Date.now());
   sauvegarderEtatHero(etatHero);
+  synchroniserVisuelAvecEtat();
   renderHero();
 }
 
 registerView("hero", showHeroView);
+
+// L'énergie se régénère toute seule : on rafraîchit l'affichage
+// périodiquement pour que le joueur la voie remonter sans recharger la page.
+setInterval(function () {
+  if (state.activeView !== "hero" || document.hidden || animationEnCours) return;
+  recalculerEnergie(etatHero, Date.now());
+  sauvegarderEtatHero(etatHero);
+  renderDonjon();
+}, 5000);
