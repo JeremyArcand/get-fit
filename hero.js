@@ -367,11 +367,11 @@ let etatHero = chargerEtatHero();
 /* ---------------- Point d'entrée appelé par workout.js ---------------- */
 // Retourne le gain complet (et pas juste un nombre) : l'interface a besoin du
 // niveau avant/après, des gemmes et du détail des multiplicateurs.
-function gagnerXP(seance, scoreNutritionDuJour) {
-  const score = scoreNutritionDuJour === undefined ? null : scoreNutritionDuJour;
+function gagnerXP(seance, evalNutritionDuJour) {
+  const evalJour = evalNutritionDuJour === undefined ? null : evalNutritionDuJour;
   const niveauAvant = niveauDepuisXP(etatHero.xpTotal);
 
-  const gain = calculerXPSeance(seance, etatHero, score);
+  const gain = calculerXPSeance(seance, etatHero, evalJour);
   etatHero.xpTotal += gain.final;
 
   const niveauApres = niveauDepuisXP(etatHero.xpTotal);
