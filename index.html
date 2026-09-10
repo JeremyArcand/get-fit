@@ -270,23 +270,37 @@
           <span id="heroXpText">0 / 50 XP</span>
         </div>
         <div class="water-bar"><div class="water-fill" id="heroXpFill" style="width:0%"></div></div>
+
+        <div class="hero-bar-label hero-moral-label">
+          <span>Moral</span>
+          <span id="heroMoralText">100 / 100</span>
+        </div>
+        <div class="water-bar"><div class="moral-fill" id="heroMoralFill" style="width:100%"></div></div>
+
         <div class="hero-stats">
           <div class="hero-stat">
-            <span class="hero-stat-val" id="heroStat-force">5</span>
-            <span class="hero-stat-name">Force</span>
+            <span class="hero-stat-val" id="heroStat-pv">100</span>
+            <span class="hero-stat-name">PV</span>
           </div>
           <div class="hero-stat">
-            <span class="hero-stat-val" id="heroStat-endurance">5</span>
-            <span class="hero-stat-name">Endurance</span>
+            <span class="hero-stat-val" id="heroStat-atq">10</span>
+            <span class="hero-stat-name">ATQ</span>
           </div>
           <div class="hero-stat">
-            <span class="hero-stat-val" id="heroStat-vitesse">5</span>
-            <span class="hero-stat-name">Vitesse</span>
+            <span class="hero-stat-val" id="heroStat-def">5</span>
+            <span class="hero-stat-name">DEF</span>
+          </div>
+          <div class="hero-stat">
+            <span class="hero-stat-val" id="heroStat-crit">5%</span>
+            <span class="hero-stat-name">Critique</span>
+          </div>
+          <div class="hero-stat">
+            <span class="hero-stat-val" id="heroStat-chance">0</span>
+            <span class="hero-stat-name">Chance</span>
           </div>
         </div>
         <div class="hero-resources">
-          <div class="hero-res"><span class="hero-res-val" id="heroPower">15</span><span class="hero-res-name">Puissance</span></div>
-          <div class="hero-res"><span class="hero-res-val">🪙 <span id="heroGold">0</span></span><span class="hero-res-name">Or</span></div>
+          <div class="hero-res"><span class="hero-res-val">🪙 <span id="heroOr">0</span></span><span class="hero-res-name">Or</span></div>
           <div class="hero-res"><span class="hero-res-val">✨ <span id="heroEssence">0</span></span><span class="hero-res-name">Essence</span></div>
           <div class="hero-res"><span class="hero-res-val">💎 <span id="heroGems">0</span></span><span class="hero-res-name">Gemmes</span></div>
         </div>
@@ -311,58 +325,43 @@
           </div>
         </div>
 
-        <div class="boss-banner" id="bossBanner" hidden>
-          <span class="boss-label">⚔️ Combat de boss</span>
-          <button class="btn-primary boss-start" id="bossStartBtn">Commencer le combat</button>
-          <span class="boss-timer" id="bossTimer" hidden>1:00</span>
-        </div>
-
         <div class="hero-bar-label">
-          <span class="dungeon-stage" id="dungeonRun">Run 1 · Palier 1/10</span>
-          <span id="dungeonDps">—</span>
+          <span class="dungeon-stage" id="dungeonRun">Cycle 1</span>
+          <span id="dungeonDps">Descentes : 1 / 5</span>
         </div>
         <div class="monster-line">
           <span class="monster-name" id="monsterName">—</span>
-          <span class="monster-hp" id="monsterHpText">0 / 0 PV</span>
+          <span class="monster-hp" id="monsterHpText">—</span>
         </div>
-        <div class="water-bar"><div class="hp-fill" id="dungeonHpFill" style="width:100%"></div></div>
+        <div class="water-bar"><div class="hp-fill" id="dungeonHpFill" style="width:0%"></div></div>
+
+        <div class="monster-line hero-hp-line">
+          <span class="monster-name">Toi</span>
+          <span class="monster-hp" id="heroHpText">—</span>
+        </div>
+        <div class="water-bar"><div class="hero-hp-fill" id="heroHpFill" style="width:100%"></div></div>
+
+        <button class="btn-primary descendre-btn" id="descendreBtn">Descendre</button>
         <p class="dungeon-result" id="dungeonResult">Le donjon t'attend…</p>
         <div class="dungeon-log" id="dungeonLog"></div>
       </div>
 
       <div class="card upgrade-card">
         <h2>Améliorer <span class="card-sub">avec l'essence</span></h2>
-        <div class="upgrade-row">
-          <button class="btn-secondary upgrade-btn" id="upgrade-force">
-            <span class="upgrade-stat">Force</span>
-            <span class="upgrade-gain">+0,5</span>
-            <span class="upgrade-cost">✨ 10</span>
-          </button>
-          <button class="btn-secondary upgrade-btn" id="upgrade-endurance">
-            <span class="upgrade-stat">Endurance</span>
-            <span class="upgrade-gain">+0,5</span>
-            <span class="upgrade-cost">✨ 10</span>
-          </button>
-          <button class="btn-secondary upgrade-btn" id="upgrade-vitesse">
-            <span class="upgrade-stat">Vitesse</span>
-            <span class="upgrade-gain">+0,5</span>
-            <span class="upgrade-cost">✨ 10</span>
-          </button>
-        </div>
+        <button class="btn-secondary upgrade-btn upgrade-btn-single" id="upgradeAtqBtn">
+          <span class="upgrade-stat">Attaque</span>
+          <span class="upgrade-gain">+1 permanent</span>
+          <span class="upgrade-cost">✨ 40</span>
+        </button>
       </div>
 
       <div class="card treasure-card">
-        <h2>Trésor <span class="card-sub">gemmes gagnées en niveau</span></h2>
-        <button class="btn-secondary chest-btn legendary-btn" id="legendaryChestBtn">
-          <span class="chest-icon">🌟</span>
-          <span class="chest-name">Coffre légendaire</span>
-          <span class="chest-price">💎 5 gemmes</span>
-        </button>
+        <h2>Forge <span class="card-sub">avec les gemmes</span></h2>
         <div class="forge-row">
           <select id="forgeSelect" aria-label="Objet à forger"></select>
-          <button class="btn-primary forge-btn" id="forgeBtn">Forger 💎 3</button>
+          <button class="btn-primary forge-btn" id="forgeBtn">Forger 💎 5</button>
         </div>
-        <p class="forge-hint">Le forgeage ajoute +1 à chaque bonus de l'objet choisi.</p>
+        <p class="forge-hint">Chaque niveau de forge ajoute de la puissance à l'objet choisi, jusqu'à 10 niveaux.</p>
       </div>
 
       <div class="card equipment-card">
@@ -372,18 +371,11 @@
 
       <div class="card hero-shop-card">
         <h2>Boutique</h2>
-        <div class="chest-row">
-          <button class="btn-secondary chest-btn" id="chestCommonBtn">
-            <span class="chest-icon">📦</span>
-            <span class="chest-name">Coffre commun</span>
-            <span class="chest-price">🪙 25 or</span>
-          </button>
-          <button class="btn-secondary chest-btn" id="chestRareBtn">
-            <span class="chest-icon">🎁</span>
-            <span class="chest-name">Coffre rare</span>
-            <span class="chest-price">🪙 60 or</span>
-          </button>
-        </div>
+        <button class="btn-secondary chest-btn" id="coffreBtn">
+          <span class="chest-icon">📦</span>
+          <span class="chest-name">Coffre</span>
+          <span class="chest-price">🪙 3000 or</span>
+        </button>
       </div>
 
       <div class="card hero-inventory-card">
@@ -402,6 +394,7 @@
 <script src="shared.js"></script>
 <script src="nutrition.js"></script>
 <script src="workout.js"></script>
+<script src="bestiaire.js"></script>
 <script src="hero.js"></script>
 </body>
 </html>

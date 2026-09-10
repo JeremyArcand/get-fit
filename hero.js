@@ -201,7 +201,8 @@ function calculerStats(etat) {
   const stats = {
     niveau: niveau,
     pv:     s.pvBase  + s.pvParNiveau  * (niveau - 1),
-    atq:    s.atqBase + s.atqParNiveau * (niveau - 1),
+    // +1 ATQ permanent par amélioration achetée à l'essence (boutique).
+    atq:    s.atqBase + s.atqParNiveau * (niveau - 1) + (etat.ameliorationsEssence || 0),
     def:    s.defBase + s.defParNiveau * (niveau - 1),
     crit:   s.critBase + s.critGainMax * (niveau / (niveau + s.critK)),
     chance: 0,
@@ -316,6 +317,7 @@ const CLE_SAUVEGARDE = 'getfit_hero_v1';
 function etatInitialHero() {
   return {
     version: 1,
+    nom: "Héros",
     xpTotal: 0,
     moral: CONFIG.moral.max,
     or: 0,
@@ -338,12 +340,40 @@ function etatInitialHero() {
 }
 
 // Chaque changement de structure ajoutera un bloc ici, jamais une réécriture.
+// Défensif : une sauvegarde d'avant la refonte donjon/équipement n'a aucun
+// de ces champs, il faut les compléter sans jamais écraser ce qui existe.
 function migrerEtatHero(etat) {
+  const defaut = etatInitialHero();
   if (!etat.version) etat.version = 1;
-  if (!etat.compteurs) etat.compteurs = etatInitialHero().compteurs;
-  if (etat.compteurs.dernierJourNutritionEvalue === undefined) {
-    etat.compteurs.dernierJourNutritionEvalue = null;
+  if (typeof etat.or !== "number") etat.or = defaut.or;
+  if (typeof etat.essence !== "number") etat.essence = defaut.essence;
+  if (typeof etat.gemmes !== "number") etat.gemmes = defaut.gemmes;
+  if (typeof etat.ameliorationsEssence !== "number") etat.ameliorationsEssence = defaut.ameliorationsEssence;
+  if (typeof etat.moral !== "number") etat.moral = defaut.moral;
+  if (typeof etat.nom !== "string" || !etat.nom.trim()) etat.nom = defaut.nom;
+
+  if (!etat.equipe || typeof etat.equipe !== "object") etat.equipe = {};
+  for (const slot of SLOTS) {
+    if (!(slot in etat.equipe)) etat.equipe[slot] = null;
   }
+
+  if (!Array.isArray(etat.inventaire)) etat.inventaire = [];
+  if (!Array.isArray(etat.journal)) etat.journal = [];
+
+  if (!etat.donjon || typeof etat.donjon !== "object") etat.donjon = {};
+  if (typeof etat.donjon.cycle !== "number") etat.donjon.cycle = defaut.donjon.cycle;
+  if (typeof etat.donjon.palierAtteint !== "number") etat.donjon.palierAtteint = defaut.donjon.palierAtteint;
+  if (typeof etat.donjon.descentesDisponibles !== "number") etat.donjon.descentesDisponibles = defaut.donjon.descentesDisponibles;
+  if (etat.donjon.derniereDescente === undefined) etat.donjon.derniereDescente = defaut.donjon.derniereDescente;
+
+  if (!etat.compteurs) etat.compteurs = {};
+  if (typeof etat.compteurs.pityLegendaire !== "number") etat.compteurs.pityLegendaire = 0;
+  if (typeof etat.compteurs.streakSemaines !== "number") etat.compteurs.streakSemaines = 0;
+  if (typeof etat.compteurs.streakNutritionJours !== "number") etat.compteurs.streakNutritionJours = 0;
+  if (typeof etat.compteurs.seancesSemaineCourante !== "number") etat.compteurs.seancesSemaineCourante = 0;
+  if (etat.compteurs.semaineCourante === undefined) etat.compteurs.semaineCourante = null;
+  if (etat.compteurs.dernierJourNutritionEvalue === undefined) etat.compteurs.dernierJourNutritionEvalue = null;
+
   return etat;
 }
 
@@ -426,348 +456,347 @@ const HERO = {
     sauvegarderEtatHero(etatHero);
   },
   etat: function () { return etatHero; },
-  stats: function () { return calculerStats(etatHero); }
+  stats: function () { return calculerStats(etatHero); },
+  // Appelé par workout.js après chaque séance loggée : une descente de
+  // donjon de plus, cumulable jusqu'au plafond.
+  crediterDescente: function (n) {
+    etatHero.donjon.descentesDisponibles = Math.min(
+      CONFIG.descentes.maxAccumulees,
+      etatHero.donjon.descentesDisponibles + n
+    );
+    sauvegarderEtatHero(etatHero);
+  },
+  // Utilisé par le code de sauvegarde/restauration de shared.js.
+  remplacerEtat: function (nouvelEtat) {
+    etatHero = migrerEtatHero(nouvelEtat);
+    sauvegarderEtatHero(etatHero);
+    if (typeof renderHero === "function") renderHero();
+  }
 };
 
 /* ================================================================
-   SYSTÈME DE DONJON ACTUEL (Phases 1 à 3) — inchangé pour l'instant
+   LOOT — tirage de rareté et génération d'objets (spec section 6).
    ================================================================ */
+function tenterDrop(etat, palier, cycle, chance) {
+  if (Math.random() >= CONFIG.loot.tauxDrop) return null;
+  return genererObjetLoot(etat, palier, cycle, chance);
+}
 
+// Partagé par le loot du donjon et le coffre (achat garanti) : seul le test
+// de taux de drop change entre les deux appelants.
+function genererObjetLoot(etat, palier, cycle, chance) {
+  etat.compteurs.pityLegendaire++;
+  const rarete = tirerRarete(etat, chance);
+  if (rarete === 'legendaire') etat.compteurs.pityLegendaire = 0;
+
+  const slot = SLOTS[Math.floor(Math.random() * SLOTS.length)];
+  return {
+    id: 'obj_' + Date.now() + '_' + Math.random().toString(36).slice(2, 5),
+    slot: slot,
+    rarete: rarete,
+    palier: palier,
+    cycle: cycle,
+    forge: 0,
+    nom: nomObjet(slot, rarete),
+    obtenuLe: todayISO()
+  };
+}
+
+function tirerRarete(etat, chance) {
+  const l = CONFIG.loot;
+  const c = etat.compteurs.pityLegendaire;
+
+  if (c >= l.pityDur) return 'legendaire';
+
+  const bonusPity = Math.max(0, c - l.pityDouxDebut) * l.pityDouxIncrement;
+  if (bonusPity > 0 && Math.random() < bonusPity) return 'legendaire';
+
+  const poids = RARETES.map(function (r, i) { return l.poids[r] * (1 + chance * l.effetChance * i); });
+  const total = poids.reduce(function (a, b) { return a + b; }, 0);
+  let tirage = Math.random() * total;
+  for (let i = 0; i < RARETES.length; i++) {
+    tirage -= poids[i];
+    if (tirage <= 0) return RARETES[i];
+  }
+  return 'commun';
+}
+
+/* ================================================================
+   FUSION ET VENTE (spec section 7).
+   ================================================================ */
+function estEquipe(etat, id) {
+  return SLOTS.some(function (slot) { return etat.equipe[slot] === id; });
+}
+
+function coutFusion(rarete) {
+  const i = RARETES.indexOf(rarete);
+  return Math.round(CONFIG.fusion.coutOrBase * Math.pow(CONFIG.fusion.facteurCoutOr, i));
+}
+
+function fusionner(etat, idsObjets) {
+  const objets = idsObjets.map(function (id) { return trouverObjet(etat, id); });
+  if (objets.some(function (o) { return !o; })) throw new Error('Objet introuvable');
+  const slot = objets[0].slot;
+  const rarete = objets[0].rarete;
+
+  if (objets.length !== CONFIG.fusion.objetsRequis) throw new Error('Il faut 3 objets');
+  if (!objets.every(function (o) { return o.slot === slot && o.rarete === rarete; })) {
+    throw new Error('Emplacement ou rareté différents');
+  }
+  if (rarete === 'legendaire') throw new Error('Rareté maximale atteinte');
+  if (etat.or < coutFusion(rarete)) throw new Error('Or insuffisant');
+
+  const chance = calculerStats(etat).chance;
+  const sautDouble = Math.random() < chance * CONFIG.fusion.chanceSautDoubleParPoint;
+  const rang = RARETES.indexOf(rarete);
+  const nouveauRang = Math.min(rang + (sautDouble ? 2 : 1), RARETES.length - 1);
+
+  etat.or -= coutFusion(rarete);
+  etat.inventaire = etat.inventaire.filter(function (o) { return idsObjets.indexOf(o.id) === -1; });
+
+  const resultat = {
+    id: 'obj_' + Date.now() + '_' + Math.random().toString(36).slice(2, 5),
+    slot: slot,
+    rarete: RARETES[nouveauRang],
+    palier: Math.max.apply(null, objets.map(function (o) { return o.palier; })),
+    cycle: Math.max.apply(null, objets.map(function (o) { return o.cycle; })),
+    forge: 0,
+    nom: nomObjet(slot, RARETES[nouveauRang]),
+    obtenuLe: todayISO()
+  };
+  etat.inventaire.push(resultat);
+  return { objet: resultat, sautDouble: sautDouble };
+}
+
+function prixVente(objet) {
+  return Math.round(puissanceObjet(objet) * CONFIG.vente.coefficientPrix);
+}
+
+function vendreObjet(etat, id) {
+  if (estEquipe(etat, id)) throw new Error("Retire l'objet avant de le vendre");
+  const objet = trouverObjet(etat, id);
+  if (!objet) throw new Error('Objet introuvable');
+  const prix = prixVente(objet);
+  etat.or += prix;
+  etat.inventaire = etat.inventaire.filter(function (o) { return o.id !== id; });
+  return { objet: objet, prix: prix };
+}
+
+/* ================================================================
+   FORGE — améliore un objet (CONFIG.equipement), 0 à forgeMax.
+   ================================================================ */
+function coutForge(objet) {
+  const e = CONFIG.equipement;
+  return Math.round(e.coutForgeBase * Math.pow(e.facteurCoutForge, objet.forge));
+}
+
+function forger(etat, id) {
+  const objet = trouverObjet(etat, id);
+  if (!objet) throw new Error('Objet introuvable');
+  if (objet.forge >= CONFIG.equipement.forgeMax) throw new Error('Forge déjà au maximum');
+  const cout = coutForge(objet);
+  if (etat.gemmes < cout) throw new Error('Gemmes insuffisantes');
+  etat.gemmes -= cout;
+  objet.forge += 1;
+  return objet;
+}
+
+/* ================================================================
+   COFFRE (OR) — complète les drops, ne les remplace pas.
+   ================================================================ */
+function ouvrirCoffre(etat) {
+  const cout = CONFIG.economie.coutCoffre;
+  if (etat.or < cout) throw new Error('Or insuffisant');
+  etat.or -= cout;
+  const chance = calculerStats(etat).chance;
+  // Toujours au palier maximal : un achat n'est jamais plus faible qu'un
+  // drop de fin de cycle.
+  const objet = genererObjetLoot(etat, CONFIG.donjon.paliers, etat.donjon.cycle, chance);
+  etat.inventaire.push(objet);
+  return objet;
+}
+
+/* ================================================================
+   AMÉLIORATIONS À L'ESSENCE — +1 ATQ permanent, coût escaladant.
+   ================================================================ */
+function coutAmeliorationEssence(etat) {
+  const e = CONFIG.economie;
+  return Math.round(e.coutAmeliorationEssence * Math.pow(e.facteurCoutEssence, etat.ameliorationsEssence));
+}
+
+function ameliorerEssence(etat) {
+  const cout = coutAmeliorationEssence(etat);
+  if (etat.essence < cout) throw new Error('Essence insuffisante');
+  etat.essence -= cout;
+  etat.ameliorationsEssence += 1;
+  return etat.ameliorationsEssence;
+}
+
+/* ================================================================
+   DESCENTES — une par jour + une par séance loggée, cumulables (spec 5).
+   ================================================================ */
+function joursEcoules(iso1, iso2) {
+  if (!iso1) return 0;
+  return Math.round((fromISO(iso2) - fromISO(iso1)) / 86400000);
+}
+
+// Crédit quotidien passif : appelé une fois à l'ouverture de l'onglet.
+function crediterDescentesQuotidiennes(etat, aujourdhui) {
+  if (!etat.donjon.derniereDescente) {
+    etat.donjon.derniereDescente = aujourdhui;
+    return;
+  }
+  const jours = joursEcoules(etat.donjon.derniereDescente, aujourdhui);
+  if (jours > 0) {
+    etat.donjon.descentesDisponibles = Math.min(
+      CONFIG.descentes.maxAccumulees,
+      etat.donjon.descentesDisponibles + jours * CONFIG.descentes.parJour
+    );
+    etat.donjon.derniereDescente = aujourdhui;
+  }
+}
+
+/* ================================================================
+   RÉSOLUTION D'UNE DESCENTE — déterministe sauf le loot (spec section 5).
+   Calcule les 10 paliers d'un coup ; chaque palier porte assez de détail
+   (ennemi, tours, dégâts, PV avant/après) pour être rejoué visuellement
+   palier par palier, coup par coup, par le moteur d'animation plus bas.
+   ================================================================ */
+function resoudreDescente(etat) {
+  const stats = calculerStats(etat);
+  const d = CONFIG.donjon;
+  const cycle = etat.donjon.cycle;
+  const croissance = Math.pow(1 + d.croissanceParCycle, cycle - 1);
+
+  let pv = stats.pv;
+  const resultat = {
+    paliers: [], reussie: false, or: 0, essence: 0, loot: [],
+    pvMax: Math.round(stats.pv), cycleDepart: cycle
+  };
+
+  for (let palier = 1; palier <= d.paliers; palier++) {
+    const boss = palier === d.paliers;
+
+    const ennemi = {
+      pv: Math.round(d.ennemiPvBase * Math.pow(palier, d.ennemiPvExposant) * croissance * (boss ? d.bossMultPv : 1)),
+      atq: Math.round(d.ennemiAtqBase * Math.pow(palier, d.ennemiAtqExposant) * croissance * (boss ? d.bossMultAtq : 1)),
+      def: Math.round(d.ennemiDefBase * Math.pow(palier, d.ennemiDefExposant) * croissance)
+    };
+
+    const degatsInfliges = Math.max(1, stats.atq * (1 - ennemi.def / (ennemi.def + CONFIG.stats.armureK)));
+    const dps = degatsInfliges * (1 + stats.crit * (CONFIG.stats.critMult - 1));
+    const tours = Math.min(Math.ceil(ennemi.pv / dps), d.toursMax);
+    const subis = Math.max(1, ennemi.atq * (1 - stats.def / (stats.def + CONFIG.stats.armureK)));
+
+    // Régénération AVANT le combat du palier, jamais après (sinon le boss
+    // profite d'une régénération qu'il n'a pas méritée).
+    if (palier > 1) pv = Math.min(stats.pv, pv + stats.pv * d.regenEntrePaliers);
+    const pvAvant = pv;
+    // Le joueur frappe en premier : il n'encaisse que (tours - 1) ripostes.
+    pv -= subis * Math.max(0, tours - 1);
+
+    const identite = boss ? bossPourCycle(cycle) : monstrePourPalier(cycle, palier);
+    const palierInfo = {
+      palier: palier, boss: boss, ennemi: ennemi, tours: tours,
+      degats: Math.round(dps), subis: Math.round(subis),
+      pvJoueurAvant: Math.round(pvAvant), monstre: identite
+    };
+
+    if (pv <= 0) {
+      palierInfo.reussi = false;
+      palierInfo.pvJoueurApres = 0;
+      resultat.paliers.push(palierInfo);
+      break;
+    }
+
+    palierInfo.reussi = true;
+    palierInfo.pvJoueurApres = Math.round(pv);
+    resultat.paliers.push(palierInfo);
+
+    resultat.or += Math.round(CONFIG.economie.orParPalier * palier * (1 + CONFIG.economie.bonusOrParCycle * (cycle - 1)));
+    resultat.essence += CONFIG.economie.essenceParPalier + (boss ? CONFIG.economie.essenceBoss : 0);
+
+    const objet = tenterDrop(etat, palier, cycle, stats.chance);
+    if (objet) { resultat.loot.push(objet); palierInfo.objet = objet; }
+
+    if (boss) resultat.reussie = true;
+  }
+  return resultat;
+}
+
+// Un échec ne coûte jamais les ressources déjà gagnées avant la chute.
+function appliquerDescente(etat, resultat) {
+  etat.or += resultat.or;
+  etat.essence += resultat.essence;
+  resultat.loot.forEach(function (o) { etat.inventaire.push(o); });
+  etat.donjon.descentesDisponibles = Math.max(0, etat.donjon.descentesDisponibles - 1);
+
+  if (resultat.reussie) {
+    etat.donjon.cycle += 1;
+    etat.donjon.palierAtteint = 0;
+  } else {
+    etat.donjon.palierAtteint = 0;
+  }
+}
+
+/* ================================================================
+   HABILLAGE — libellés et icônes d'affichage.
+   ================================================================ */
+const SLOT_LABELS = { arme: "Arme", casque: "Casque", plastron: "Plastron", jambieres: "Jambières", bague: "Bague", collier: "Collier" };
+const SLOT_ICONS = { arme: "🗡️", casque: "🪖", plastron: "🛡️", jambieres: "👖", bague: "💍", collier: "📿" };
+const RARITY_LABELS = { commun: "commune", rare: "rare", ultraRare: "ultra-rare", mythique: "mythique", legendaire: "légendaire" };
+
+function fmtStat(v) {
+  return String(Math.round(v * 10) / 10).replace(".", ",");
+}
+
+function itemDisplayName(o) {
+  return o.forge > 0 ? o.nom + " +" + o.forge : o.nom;
+}
+
+/* ================================================================
+   SPRITE DU HÉROS — flipbook d'attaque (repris tel quel de l'ancien
+   système, rien à changer ici : les sprites ne bougent pas).
+   ================================================================ */
 const DUNGEON_TICK_SECONDS = 1;
-const BOSS_TIME_LIMIT_SECONDS = 60;
-const MAX_OFFLINE_SECONDS = 1800; // 30 min de rattrapage maximum
-const DUNGEON_MAX_STAGE = 10;
-
-// Un monstre par palier ; le palier 10 est le boss.
-const MONSTER_ROSTER = [
-  { name: "Gobelin poussif",    icon: "👺" },
-  { name: "Loup des landes",    icon: "🐺" },
-  { name: "Golem de pierre",    icon: "🗿" },
-  { name: "Spectre affamé",     icon: "👻" },
-  { name: "Ogre bedonnant",     icon: "👹" },
-  { name: "Basilic endormi",    icon: "🐍" },
-  { name: "Chevalier déchu",    icon: "⚔️" },
-  { name: "Hydre à deux têtes", icon: "🐉" },
-  { name: "Démon de la fonte",  icon: "😈" },
-  { name: "Dragon d'acier",     icon: "🐲" }
-];
-
-// Sprites du héros (frames exportées de Spritesheets.ai, 1 sur 5 conservée).
 const HERO_ATTACK_FRAME_COUNT = 12;
 const HERO_ATTACK_FRAME_MS = 80;
 const HERO_IDLE_SRC = "assets/hero/hero-idle.png";
 
-const LEGENDARY_CHEST_GEMS = 5;
-const FORGE_GEMS = 3;
-const CHEST_COMMON_PRICE = 25;
-const CHEST_RARE_PRICE = 60;
-
-const SLOT_LABELS = {
-  weapon: "Arme",
-  helmet: "Casque",
-  chestplate: "Plastron",
-  leggings: "Jambières",
-  ring: "Anneau",
-  necklace: "Collier"
-};
-const SLOT_ICONS = {
-  weapon: "🗡️", helmet: "🪖", chestplate: "🛡️",
-  leggings: "👖", ring: "💍", necklace: "📿"
-};
-const RARITY_LABELS = { common: "commune", rare: "rare", legendary: "légendaire" };
-
-/* ================= TABLES DE BUTIN ================= */
-const LOOT_COMMON = [
-  { name: "Dague rouillée",       slot: "weapon",     bonus: { force: 2 } },
-  { name: "Gourdin de chêne",     slot: "weapon",     bonus: { force: 3 } },
-  { name: "Casque de cuir",       slot: "helmet",     bonus: { endurance: 2 } },
-  { name: "Plastron matelassé",   slot: "chestplate", bonus: { endurance: 3 } },
-  { name: "Jambières de toile",   slot: "leggings",   bonus: { vitesse: 2 } },
-  { name: "Anneau de cuivre",     slot: "ring",       bonus: { force: 1, vitesse: 1 } },
-  { name: "Amulette d'os",        slot: "necklace",   bonus: { endurance: 1, vitesse: 2 } }
-];
-
-const LOOT_RARE = [
-  { name: "Lame de l'aurore",     slot: "weapon",     bonus: { force: 5, vitesse: 3 } },
-  { name: "Marteau du colosse",   slot: "weapon",     bonus: { force: 6, endurance: 3 } },
-  { name: "Heaume runique",       slot: "helmet",     bonus: { endurance: 5, force: 3 } },
-  { name: "Égide du rempart",     slot: "chestplate", bonus: { endurance: 6, vitesse: 3 } },
-  { name: "Grèves du vent",       slot: "leggings",   bonus: { vitesse: 6, force: 3 } },
-  { name: "Sceau du duelliste",   slot: "ring",       bonus: { force: 4, vitesse: 4 } },
-  { name: "Collier des marées",   slot: "necklace",   bonus: { endurance: 4, vitesse: 4 } }
-];
-
-// Rareté légendaire : accessible uniquement par le coffre à gemmes.
-const LOOT_LEGENDARY = [
-  { name: "Ruine des titans",       slot: "weapon",     bonus: { force: 10, endurance: 6 } },
-  { name: "Couronne du roi déchu",  slot: "helmet",     bonus: { endurance: 8, force: 7, vitesse: 6 } },
-  { name: "Carapace du dragon",     slot: "chestplate", bonus: { endurance: 10, force: 7 } },
-  { name: "Foulées du mirage",      slot: "leggings",   bonus: { vitesse: 10, endurance: 6 } },
-  { name: "Anneau du serment",      slot: "ring",       bonus: { force: 8, endurance: 8, vitesse: 8 } },
-  { name: "Cœur d'étoile",          slot: "necklace",   bonus: { force: 9, vitesse: 9 } }
-];
-
-const LOOT_TABLES = { common: LOOT_COMMON, rare: LOOT_RARE, legendary: LOOT_LEGENDARY };
-
-/* ================= CALCULS DE BASE ================= */
-function xpForNextLevel(level){
-  return 50 * level;
-}
-
-function fmtStat(v){
-  return String(Math.round(v * 10) / 10).replace(".", ",");
-}
-
-function equippedItems(){
-  const hero = state.hero;
-  return EQUIPMENT_SLOTS
-    .map(function(slot){ return findItem(hero.equipment[slot]); })
-    .filter(Boolean);
-}
-
-function findItem(id){
-  if(!id) return null;
-  return state.hero.inventory.find(function(item){ return item.id === id; }) || null;
-}
-
-// Bonus permanents achetés avec l'essence (+0,5 par achat).
-function essenceBonus(stat){
-  return state.hero.essenceUpgrades[stat] * 0.5;
-}
-
-function baseStats(){
-  const s = state.hero.stats;
-  return {
-    force: s.force + essenceBonus("force"),
-    endurance: s.endurance + essenceBonus("endurance"),
-    vitesse: s.vitesse + essenceBonus("vitesse")
-  };
-}
-
-// Stats de base + bonus de TOUS les emplacements équipés.
-function totalStats(){
-  const total = baseStats();
-  equippedItems().forEach(function(item){
-    Object.keys(item.bonus).forEach(function(stat){
-      if(total[stat] !== undefined){ total[stat] += item.bonus[stat]; }
-    });
-  });
-  return total;
-}
-
-function totalPower(){
-  const s = totalStats();
-  return s.force + s.endurance + s.vitesse;
-}
-
-function bonusLabel(bonus){
-  return Object.keys(bonus).map(function(stat){
-    return "+" + bonus[stat] + " " + stat;
-  }).join(" · ");
-}
-
-function itemDisplayName(item){
-  return item.upgradeCount > 0 ? item.name + " +" + item.upgradeCount : item.name;
-}
-
-function createItem(rarity){
-  const table = LOOT_TABLES[rarity] || LOOT_COMMON;
-  const pick = table[Math.floor(Math.random() * table.length)];
-  const bonus = {};
-  Object.keys(pick.bonus).forEach(function(stat){ bonus[stat] = pick.bonus[stat]; });
-  return {
-    id: nextId(),
-    name: pick.name,
-    slot: pick.slot,
-    bonus: bonus,
-    rarity: rarity,
-    upgradeCount: 0
-  };
-}
-
-function addItem(item){
-  state.hero.inventory.push(item);
-  // Emplacement encore vide : on équipe directement, c'est toujours un gain.
-  if(!state.hero.equipment[item.slot]){
-    state.hero.equipment[item.slot] = item.id;
-  }
-  return item;
-}
-
-/* ================= DONJON — COMBAT CONTINU ================= */
-// Les PV du monstre servent d'échelle de difficulté : plus le palier est
-// haut, plus il faut de secondes d'attaque pour l'abattre.
-function stageDifficulty(stage){
-  const base = 15 * Math.pow(1.35, stage);
-  return stage === DUNGEON_MAX_STAGE ? base * 1.5 : base;
-}
-
-function monsterMaxHp(stage){
-  return Math.round(stageDifficulty(stage));
-}
-
-function makeMonster(stage){
-  const entry = MONSTER_ROSTER[(stage - 1) % MONSTER_ROSTER.length];
-  const maxHp = monsterMaxHp(stage);
-  return { name: entry.name, icon: entry.icon, stage: stage, maxHp: maxHp, hp: maxHp };
-}
-
-// Dégâts fixes par attaque. La force totale (équipement compris) compte pour
-// moitié, et l'arme ajoute son bonus de force en entier.
-function attackDamage(){
-  const weapon = findItem(state.hero.equipment.weapon);
-  const weaponForce = weapon && weapon.bonus.force ? weapon.bonus.force : 0;
-  return 3 + Math.floor(totalStats().force / 2) + weaponForce;
-}
-
-function isBossStage(){
-  return state.hero.dungeon.stage === DUNGEON_MAX_STAGE;
-}
-
-// Remet un monstre cohérent en place si la sauvegarde n'en avait pas.
-function ensureMonster(){
-  const d = state.hero.dungeon;
-  const m = d.currentMonster;
-  if(!m || m.stage !== d.stage || !(m.maxHp > 0) || !(m.hp > 0)){
-    d.currentMonster = makeMonster(d.stage);
-    return true;
-  }
-  return false;
-}
-
-function rollDropRarity(stage){
-  // Plus le palier est haut, plus le butin penche vers "rare".
-  const rareChance = Math.min(0.6, 0.05 + stage * 0.06);
-  return Math.random() < rareChance ? "rare" : "common";
-}
-
-// Récompenses d'un monstre abattu, puis passage au monstre suivant.
-// Utilisé en direct comme en rattrapage hors-ligne.
-function grantKillRewards(isBoss){
-  const d = state.hero.dungeon;
-  const stage = d.stage;
-  const multiplier = isBoss ? 3 : 1;
-  const essence = (2 + stage) * multiplier;
-  const gold = (3 + stage * 2) * multiplier;
-
-  d.essence += essence;
-  state.hero.gold += gold;
-
-  let item = null;
-  const dropChance = isBoss ? 1 : (0.10 + stage * 0.02);
-  if(Math.random() < dropChance){
-    item = addItem(createItem(isBoss ? "rare" : rollDropRarity(stage)));
-  }
-
-  if(isBoss){
-    d.run += 1;
-    d.stage = 1;
-    d.bossFightActive = false;
-    d.bossTimeRemaining = 0;
-  } else {
-    d.stage = stage + 1;
-    if(d.stage === DUNGEON_MAX_STAGE){
-      // Le boss ne démarre jamais tout seul : il attend le clic du joueur.
-      d.bossFightActive = false;
-      d.bossTimeRemaining = BOSS_TIME_LIMIT_SECONDS;
-    }
-  }
-  d.currentMonster = makeMonster(d.stage);
-  return { stage: stage, isBoss: isBoss, essence: essence, gold: gold, item: item };
-}
-
-let fightLog = [];
-let lastResult = null;
-
-function pushLog(entry){
-  fightLog.unshift(entry);
-  fightLog = fightLog.slice(0, 5);
-  lastResult = entry;
-}
-
-function describeResult(entry){
-  if(!entry) return "Le donjon t'attend…";
-  if(entry.text) return entry.text;
-  const where = entry.isBoss ? "Boss" : "Palier " + entry.stage;
-  return "✅ " + where + " vaincu · +" + entry.essence + " essence · +" + entry.gold + " or" +
-    (entry.item ? " · 🎁 " + itemDisplayName(entry.item) : "");
-}
-
-// Rattrapage du temps écoulé. Ne résout jamais un combat de boss : le joueur
-// doit être présent pour voir le minuteur tourner.
-function catchUpDungeon(){
-  const d = state.hero.dungeon;
-  const elapsedSeconds = Math.floor((Date.now() - d.lastTick) / 1000);
-  d.lastTick = Date.now();
-  if(elapsedSeconds <= 0) return;
-
-  const seconds = Math.min(elapsedSeconds, MAX_OFFLINE_SECONDS);
-  const attacks = Math.floor(seconds / DUNGEON_TICK_SECONDS);
-  if(attacks <= 0 || isBossStage()) { saveHero(); return; }
-
-  const summary = { cleared: 0, essence: 0, gold: 0, items: 0, reachedBoss: false };
-  const damage = attackDamage();
-
-  for(let i = 0; i < attacks; i++){
-    if(isBossStage()){ summary.reachedBoss = true; break; }
-    d.currentMonster.hp -= damage;
-    if(d.currentMonster.hp <= 0){
-      const reward = grantKillRewards(false);
-      pushLog(reward);
-      summary.cleared += 1;
-      summary.essence += reward.essence;
-      summary.gold += reward.gold;
-      if(reward.item){ summary.items += 1; }
-    }
-  }
-  saveHero();
-
-  if(summary.cleared === 0 && !summary.reachedBoss) return;
-  showToast("Pendant ton absence : " + summary.cleared + " palier" + (summary.cleared > 1 ? "s" : "") +
-    " franchi" + (summary.cleared > 1 ? "s" : "") + ", +" + summary.essence + " essence, +" +
-    summary.gold + " or, " + summary.items + " objet" + (summary.items > 1 ? "s" : "") + " trouvé" +
-    (summary.items > 1 ? "s" : "") + (summary.reachedBoss ? " · le boss t'attend !" : ""));
-}
-
-/* ================= SPRITE DU HÉROS ================= */
-// Flipbook : on remplace la source de l'image frame par frame, une seule
-// passe, puis retour à la pose au repos.
 let attackFrameTimer = null;
 let spriteBroken = false;
 let framesPreloaded = false;
 
-function heroAttackFrameSrc(index){
+function heroAttackFrameSrc(index) {
   return "assets/hero/attack/hero-attack-" + String(index).padStart(2, "0") + ".png";
 }
 
-function preloadAttackFrames(){
-  // Chargées à la première ouverture de l'onglet seulement : inutile de
-  // télécharger les frames pour quelqu'un qui n'ouvre jamais Mon Héros.
-  if(framesPreloaded || spriteBroken) return;
+function preloadAttackFrames() {
+  if (framesPreloaded || spriteBroken) return;
   framesPreloaded = true;
-  for(let i = 1; i <= HERO_ATTACK_FRAME_COUNT; i++){
+  for (let i = 1; i <= HERO_ATTACK_FRAME_COUNT; i++) {
     const img = new Image();
     img.src = heroAttackFrameSrc(i);
   }
 }
 
-function stopHeroAttack(){
-  if(attackFrameTimer){
+function stopHeroAttack() {
+  if (attackFrameTimer) {
     clearInterval(attackFrameTimer);
     attackFrameTimer = null;
   }
 }
 
-function playHeroAttack(){
+function playHeroAttack() {
   const img = document.getElementById("heroSprite");
-  if(!img || spriteBroken) return;
+  if (!img || spriteBroken) return;
   stopHeroAttack();
 
   let frame = 1;
   img.src = heroAttackFrameSrc(frame);
-  attackFrameTimer = setInterval(function(){
+  attackFrameTimer = setInterval(function () {
     frame += 1;
-    if(frame > HERO_ATTACK_FRAME_COUNT){
+    if (frame > HERO_ATTACK_FRAME_COUNT) {
       stopHeroAttack();
       img.src = HERO_IDLE_SRC;
       return;
@@ -776,452 +805,419 @@ function playHeroAttack(){
   }, HERO_ATTACK_FRAME_MS);
 }
 
-// Chemin cassé ou image absente : on retombe sur la silhouette SVG plutôt
-// que d'afficher une icône brisée.
-document.getElementById("heroSprite").addEventListener("error", function(){
+document.getElementById("heroSprite").addEventListener("error", function () {
   spriteBroken = true;
   stopHeroAttack();
   this.hidden = true;
-  // SVGElement n'hérite pas de HTMLElement : « .hidden = false » ne ferait que
-  // poser une propriété JS sans retirer l'attribut, il faut passer par le DOM.
   document.getElementById("heroSpriteFallback").removeAttribute("hidden");
 });
 
-/* ================= EFFETS DE COMBAT ================= */
-function spawnFx(html, className, lifeMs){
+/* ================================================================
+   EFFETS DE COMBAT — repris tels quels.
+   ================================================================ */
+function spawnFx(html, className, lifeMs) {
   const layer = document.getElementById("monsterFx");
-  if(!layer) return;
+  if (!layer) return;
   const el = document.createElement("span");
   el.className = className;
   el.innerHTML = html;
   layer.appendChild(el);
-  setTimeout(function(){ el.remove(); }, lifeMs);
+  setTimeout(function () { el.remove(); }, lifeMs);
 }
 
-function showHitEffects(damage){
+function showHitEffects(damage) {
   const figure = document.getElementById("monsterFigure");
-  if(figure){
+  if (figure) {
     figure.classList.remove("is-hit");
-    void figure.offsetWidth; // relance l'animation même sur des coups rapprochés
+    void figure.offsetWidth;
     figure.classList.add("is-hit");
   }
-  // Décalage horizontal aléatoire pour que les nombres ne se superposent pas.
   const offset = Math.round((Math.random() - 0.5) * 40);
   spawnFx("-" + damage, "fx-damage", 900);
   const last = document.querySelector("#monsterFx .fx-damage:last-child");
-  if(last){ last.style.setProperty("--fx-x", offset + "px"); }
+  if (last) { last.style.setProperty("--fx-x", offset + "px"); }
 }
 
-function playDeathParticles(){
-  for(let i = 0; i < 8; i++){
+function playDeathParticles() {
+  for (let i = 0; i < 8; i++) {
     const angle = (Math.PI * 2 * i) / 8;
     spawnFx("", "fx-particle", 700);
     const particle = document.querySelector("#monsterFx .fx-particle:last-child");
-    if(particle){
+    if (particle) {
       particle.style.setProperty("--px", Math.round(Math.cos(angle) * 46) + "px");
       particle.style.setProperty("--py", Math.round(Math.sin(angle) * 46) + "px");
     }
   }
 }
 
-/* ================= BOUCLE DE COMBAT ================= */
-let heroSaveTimer = null;
-function saveHeroSoon(){
-  // Une écriture localStorage par seconde serait inutilement coûteuse.
-  if(heroSaveTimer) return;
-  heroSaveTimer = setTimeout(function(){
-    heroSaveTimer = null;
-    saveHero();
-  }, 3000);
-}
+/* ================================================================
+   MOTEUR D'ANIMATION — la descente est déjà entièrement résolue
+   (resoudreDescente est déterministe) ; ce moteur ne fait que rejouer
+   le résultat visuellement, palier par palier, coup par coup, au même
+   rythme que l'ancien donjon temps réel.
+   ================================================================ */
+let animationEnCours = false;
+let journalDescentes = [];
+const etatVisuel = {
+  monstreNom: "—", monstreIcone: "👺", monstrePv: 0, monstrePvMax: 0,
+  joueurPv: 0, joueurPvMax: 0, texte: "Le donjon t'attend…"
+};
 
-function failBoss(){
-  const d = state.hero.dungeon;
-  d.bossFightActive = false;
-  d.bossTimeRemaining = 0;
-  d.stage = 1;
-  d.currentMonster = makeMonster(1);
-  pushLog({ text: "⏳ Boss non vaincu à temps — retour au palier 1", fail: true });
-  saveHero();
-  renderDungeon();
-  showToast("⏳ Temps écoulé ! Le boss t'échappe. Retour au palier 1, tes gains sont conservés.");
-}
-
-function performTick(){
-  const d = state.hero.dungeon;
-  ensureMonster();
-
-  // Le boss attend explicitement que le joueur lance le combat.
-  if(isBossStage() && !d.bossFightActive){
-    renderDungeon();
+function lancerDescente() {
+  if (animationEnCours) return;
+  if (etatHero.donjon.descentesDisponibles <= 0) {
+    showToast("Aucune descente disponible : 1 par jour, +1 par séance loggée (max 5).");
     return;
   }
-
-  if(isBossStage()){
-    d.bossTimeRemaining -= DUNGEON_TICK_SECONDS;
-    if(d.bossTimeRemaining <= 0){
-      failBoss();
-      return;
-    }
-  }
-
-  const damage = attackDamage();
-  d.currentMonster.hp -= damage;
-  playHeroAttack();
-  showHitEffects(damage);
-
-  if(d.currentMonster.hp <= 0){
-    const wasBoss = isBossStage();
-    playDeathParticles();
-    const reward = grantKillRewards(wasBoss);
-    pushLog(reward);
-    saveHero();
-    renderHero();
-    if(wasBoss){
-      showToast("🏅 Boss vaincu ! Run " + d.run + " · +" + reward.essence + " essence · +" + reward.gold + " or");
-    } else if(reward.item){
-      showToast("🎁 " + itemDisplayName(reward.item) + " (" + RARITY_LABELS[reward.item.rarity] + ")");
-    }
-    return;
-  }
-
-  saveHeroSoon();
-  renderDungeon();
+  const resultat = resoudreDescente(etatHero);
+  appliquerDescente(etatHero, resultat);
+  sauvegarderEtatHero(etatHero);
+  animerDescente(resultat);
 }
 
-// Une attaque par tick tant que l'onglet est visible ; sinon le temps
-// s'accumule et sera rattrapé au retour.
-setInterval(function(){
-  if(state.activeView !== "hero" || document.hidden) return;
-  state.hero.dungeon.lastTick = Date.now();
-  performTick();
-}, DUNGEON_TICK_SECONDS * 1000);
-
-document.getElementById("bossStartBtn").addEventListener("click", function(){
-  const d = state.hero.dungeon;
-  if(!isBossStage() || d.bossFightActive) return;
-  d.bossFightActive = true;
-  d.bossTimeRemaining = BOSS_TIME_LIMIT_SECONDS;
-  d.lastTick = Date.now();
-  saveHero();
-  renderDungeon();
-});
-
-/* ================= PROGRESSION DEPUIS LES SÉANCES ================= */
-// Appelé par workout.js à la finalisation d'une séance : seule source d'XP,
-// donc seule source de gemmes.
-function onWorkoutCompleted(session, options){
-  const opts = options || {};
-  const hero = state.hero;
-
-  let setCount = 0;
-  session.exercises.forEach(function(ex){ setCount += ex.sets.length; });
-  if(setCount === 0) return;
-
-  let gained = setCount * 2;
-  if(opts.hasPR){ gained += 15; }
-  hero.xp += gained;
-
-  let levelsGained = 0;
-  let gemsGained = 0;
-  while(hero.xp >= xpForNextLevel(hero.level)){
-    hero.xp -= xpForNextLevel(hero.level);
-    hero.level += 1;
-    hero.stats.force += 1;
-    hero.stats.endurance += 1;
-    hero.stats.vitesse += 1;
-    hero.gems += 1;
-    gemsGained += 1;
-    if(hero.level % 5 === 0){
-      hero.gems += 3;
-      gemsGained += 3;
-    }
-    levelsGained += 1;
-  }
-
-  saveHero();
+function animerDescente(resultat) {
+  animationEnCours = true;
+  preloadAttackFrames();
+  etatVisuel.joueurPvMax = resultat.pvMax;
   renderHero();
 
-  const parts = [];
-  if(opts.prMessage){ parts.push(opts.prMessage); }
-  parts.push("⚔️ +" + gained + " XP");
-  if(levelsGained > 0){
-    parts.push("⭐ Niveau " + hero.level + " · +" + gemsGained + " 💎");
-  }
-  showToast(parts.join("  ·  "));
-}
-
-/* ================= RENDU ================= */
-function renderHero(){
-  renderHeroCharacter();
-  renderDungeon();
-  renderUpgrades();
-  renderTreasure();
-  renderEquipment();
-  renderHeroShop();
-  renderHeroInventory();
-}
-
-function renderHeroCharacter(){
-  const hero = state.hero;
-  const nameInput = document.getElementById("heroName");
-  if(document.activeElement !== nameInput){ nameInput.value = hero.name; }
-
-  document.getElementById("heroLevel").textContent = "Niveau " + hero.level;
-
-  const needed = xpForNextLevel(hero.level);
-  document.getElementById("heroXpText").textContent = hero.xp + " / " + needed + " XP";
-  document.getElementById("heroXpFill").style.width = Math.min(100, (hero.xp / needed) * 100) + "%";
-
-  const total = totalStats();
-  const base = baseStats();
-  ["force","endurance","vitesse"].forEach(function(stat){
-    const extra = total[stat] - base[stat];
-    document.getElementById("heroStat-" + stat).innerHTML =
-      fmtStat(total[stat]) +
-      (extra > 0 ? ' <span class="hero-stat-bonus">+' + fmtStat(extra) + '</span>' : "");
-  });
-
-  document.getElementById("heroPower").textContent = fmtStat(totalPower());
-  document.getElementById("heroGold").textContent = hero.gold;
-  document.getElementById("heroEssence").textContent = hero.dungeon.essence;
-  document.getElementById("heroGems").textContent = hero.gems;
-}
-
-function fmtClock(totalSeconds){
-  const s = Math.max(0, Math.ceil(totalSeconds));
-  return Math.floor(s / 60) + ":" + (s % 60 < 10 ? "0" : "") + (s % 60);
-}
-
-function renderDungeon(){
-  const d = state.hero.dungeon;
-  const isBoss = isBossStage();
-  ensureMonster();
-  const monster = d.currentMonster;
-
-  document.getElementById("dungeonRun").textContent =
-    "Run " + d.run + " · " + (isBoss ? "⚔️ BOSS" : "Palier " + d.stage + "/" + DUNGEON_MAX_STAGE);
-  document.getElementById("dungeonDps").textContent = attackDamage() + " dégâts / attaque";
-
-  document.getElementById("monsterEmoji").textContent = monster.icon;
-  document.getElementById("monsterName").textContent = monster.name;
-  document.getElementById("monsterHpText").textContent =
-    Math.max(0, Math.ceil(monster.hp)) + " / " + monster.maxHp + " PV";
-  document.getElementById("dungeonHpFill").style.width =
-    Math.max(0, (monster.hp / monster.maxHp) * 100) + "%";
-
-  // Bannière de boss : avant le clic, puis minuteur pendant le combat.
-  const banner = document.getElementById("bossBanner");
-  const startBtn = document.getElementById("bossStartBtn");
-  const timer = document.getElementById("bossTimer");
-  if(isBoss){
-    banner.hidden = false;
-    if(d.bossFightActive){
-      startBtn.hidden = true;
-      timer.hidden = false;
-      timer.textContent = fmtClock(d.bossTimeRemaining);
-      timer.classList.toggle("is-urgent", d.bossTimeRemaining <= 10);
-    } else {
-      startBtn.hidden = false;
-      timer.hidden = true;
+  let i = 0;
+  function paliersuivantOuFin(arreter) {
+    if (arreter || i >= resultat.paliers.length) {
+      terminerAnimation(resultat);
+      return;
     }
-  } else {
-    banner.hidden = true;
+    const p = resultat.paliers[i];
+    i += 1;
+    animerPalier(p, paliersuivantOuFin);
   }
+  paliersuivantOuFin(false);
+}
 
-  document.getElementById("dungeonResult").textContent = describeResult(lastResult);
+function animerPalier(p, suite) {
+  etatVisuel.monstreNom = p.monstre.nom;
+  etatVisuel.monstreIcone = p.monstre.icone;
+  etatVisuel.monstrePvMax = p.ennemi.pv;
+  etatVisuel.monstrePv = p.ennemi.pv;
+  etatVisuel.joueurPv = p.pvJoueurAvant;
+  etatVisuel.texte = (p.boss ? "⚔️ Boss — " : "Palier " + p.palier + "/10 — ") + p.monstre.nom;
+  renderDonjon();
 
-  const log = document.getElementById("dungeonLog");
-  log.innerHTML = fightLog.map(function(entry){
-    return '<div class="dungeon-log-line' + (entry.fail ? " is-fail" : "") + '">' +
-      escapeHtml(describeResult(entry)) + "</div>";
+  let coup = 0;
+  function prochainCoup() {
+    coup += 1;
+    playHeroAttack();
+    etatVisuel.monstrePv = Math.max(0, p.ennemi.pv - p.degats * coup);
+    showHitEffects(p.degats);
+
+    // Le joueur frappe en premier : la première riposte arrive après le 2e coup.
+    if (coup > 1) {
+      etatVisuel.joueurPv = Math.max(0, p.pvJoueurAvant - p.subis * (coup - 1));
+    }
+    renderDonjon();
+
+    if (!p.reussi && etatVisuel.joueurPv <= 0) {
+      setTimeout(function () { suite(true); }, 500);
+      return;
+    }
+    if (coup >= p.tours) {
+      etatVisuel.monstrePv = 0;
+      playDeathParticles();
+      renderDonjon();
+      setTimeout(function () { suite(false); }, 350);
+      return;
+    }
+    setTimeout(prochainCoup, DUNGEON_TICK_SECONDS * 1000);
+  }
+  setTimeout(prochainCoup, DUNGEON_TICK_SECONDS * 1000);
+}
+
+function terminerAnimation(resultat) {
+  animationEnCours = false;
+  const dernier = resultat.paliers[resultat.paliers.length - 1];
+  const texte = resultat.reussie
+    ? "🏅 Cycle " + resultat.cycleDepart + " terminé ! +" + resultat.or + " or · +" + resultat.essence + " essence" +
+      (resultat.loot.length ? " · 🎁 " + resultat.loot.length + " objet" + (resultat.loot.length > 1 ? "s" : "") : "")
+    : "💀 Défaite au palier " + dernier.palier + "/10 · déjà acquis : +" + resultat.or + " or · +" + resultat.essence + " essence";
+  journalDescentes.unshift({ texte: texte, echec: !resultat.reussie });
+  journalDescentes = journalDescentes.slice(0, 5);
+  etatVisuel.texte = texte;
+  showToast(texte);
+  renderHero();
+}
+
+/* ================================================================
+   RENDU
+   ================================================================ */
+function renderHero() {
+  renderHeroCharacter();
+  renderDonjon();
+  renderEquipement();
+  renderInventaire();
+  renderAmeliorations();
+  renderTresor();
+}
+
+function renderHeroCharacter() {
+  const nameInput = document.getElementById("heroName");
+  if (document.activeElement !== nameInput) nameInput.value = etatHero.nom;
+
+  const niveau = niveauDepuisXP(etatHero.xpTotal);
+  document.getElementById("heroLevel").textContent =
+    niveau >= CONFIG.xp.niveauMax ? "Niveau maximum" : "Niveau " + niveau;
+
+  const xpDebut = TABLE_XP[niveau - 1] || 0;
+  const xpFin = TABLE_XP[niveau] || xpDebut;
+  const dansNiveau = etatHero.xpTotal - xpDebut;
+  const requisNiveau = Math.max(1, xpFin - xpDebut);
+  document.getElementById("heroXpText").textContent =
+    niveau >= CONFIG.xp.niveauMax ? etatHero.xpTotal + " XP" : dansNiveau + " / " + requisNiveau + " XP";
+  document.getElementById("heroXpFill").style.width =
+    (niveau >= CONFIG.xp.niveauMax ? 100 : Math.min(100, (dansNiveau / requisNiveau) * 100)) + "%";
+
+  const stats = calculerStats(etatHero);
+  document.getElementById("heroStat-pv").textContent = Math.round(stats.pv);
+  document.getElementById("heroStat-atq").textContent = fmtStat(stats.atq);
+  document.getElementById("heroStat-def").textContent = fmtStat(stats.def);
+  document.getElementById("heroStat-crit").textContent = fmtStat(stats.crit * 100) + "%";
+  document.getElementById("heroStat-chance").textContent = fmtStat(stats.chance);
+
+  document.getElementById("heroOr").textContent = etatHero.or;
+  document.getElementById("heroEssence").textContent = etatHero.essence;
+  document.getElementById("heroGems").textContent = etatHero.gemmes;
+
+  const moralPct = Math.round((etatHero.moral / CONFIG.moral.max) * 100);
+  document.getElementById("heroMoralFill").style.width = moralPct + "%";
+  document.getElementById("heroMoralText").textContent = Math.round(etatHero.moral) + " / " + CONFIG.moral.max;
+}
+
+function renderDonjon() {
+  const d = etatHero.donjon;
+  document.getElementById("dungeonRun").textContent = "Cycle " + d.cycle + " — " + nomCycle(d.cycle);
+  document.getElementById("dungeonDps").textContent = "Descentes : " + d.descentesDisponibles + " / " + CONFIG.descentes.maxAccumulees;
+
+  document.getElementById("monsterEmoji").textContent = etatVisuel.monstreIcone;
+  document.getElementById("monsterName").textContent = etatVisuel.monstreNom;
+  document.getElementById("monsterHpText").textContent =
+    etatVisuel.monstrePvMax > 0 ? Math.max(0, Math.ceil(etatVisuel.monstrePv)) + " / " + etatVisuel.monstrePvMax + " PV" : "—";
+  document.getElementById("dungeonHpFill").style.width =
+    (etatVisuel.monstrePvMax > 0 ? Math.max(0, (etatVisuel.monstrePv / etatVisuel.monstrePvMax) * 100) : 0) + "%";
+
+  document.getElementById("heroHpText").textContent =
+    etatVisuel.joueurPvMax > 0 ? Math.max(0, Math.ceil(etatVisuel.joueurPv)) + " / " + Math.round(etatVisuel.joueurPvMax) + " PV" : "—";
+  document.getElementById("heroHpFill").style.width =
+    (etatVisuel.joueurPvMax > 0 ? Math.max(0, (etatVisuel.joueurPv / etatVisuel.joueurPvMax) * 100) : 100) + "%";
+
+  document.getElementById("dungeonResult").textContent = etatVisuel.texte;
+
+  const btn = document.getElementById("descendreBtn");
+  btn.disabled = animationEnCours || d.descentesDisponibles <= 0;
+  btn.textContent = animationEnCours ? "Descente en cours…" : "Descendre";
+
+  document.getElementById("dungeonLog").innerHTML = journalDescentes.map(function (l) {
+    return '<div class="dungeon-log-line' + (l.echec ? " is-fail" : "") + '">' + escapeHtml(l.texte) + "</div>";
   }).join("");
 }
 
-function upgradeCost(stat){
-  return Math.round(10 * Math.pow(1.5, state.hero.essenceUpgrades[stat]));
-}
-
-function renderUpgrades(){
-  const essence = state.hero.dungeon.essence;
-  ["force","endurance","vitesse"].forEach(function(stat){
-    const cost = upgradeCost(stat);
-    const btn = document.getElementById("upgrade-" + stat);
-    btn.disabled = essence < cost;
-    btn.querySelector(".upgrade-cost").textContent = "✨ " + cost;
-  });
-}
-
-function renderTreasure(){
-  const gems = state.hero.gems;
-  document.getElementById("legendaryChestBtn").disabled = gems < LEGENDARY_CHEST_GEMS;
-
-  const select = document.getElementById("forgeSelect");
-  const inventory = state.hero.inventory;
-  const previous = select.value;
-  if(inventory.length === 0){
-    select.innerHTML = '<option value="">Aucun objet à forger</option>';
-    select.disabled = true;
-  } else {
-    select.disabled = false;
-    select.innerHTML = inventory.map(function(item){
-      return '<option value="' + item.id + '">' + escapeHtml(itemDisplayName(item)) +
-        " — " + SLOT_LABELS[item.slot] + "</option>";
-    }).join("");
-    if(inventory.some(function(i){ return i.id === previous; })){ select.value = previous; }
-  }
-  document.getElementById("forgeBtn").disabled = gems < FORGE_GEMS || inventory.length === 0;
-}
-
-function renderEquipment(){
-  const hero = state.hero;
-  document.getElementById("equipmentGrid").innerHTML = EQUIPMENT_SLOTS.map(function(slot){
-    const item = findItem(hero.equipment[slot]);
-    return '<button class="equip-slot' + (item ? " is-filled" : "") + '" data-goto-slot="' + slot + '">' +
+function renderEquipement() {
+  document.getElementById("equipmentGrid").innerHTML = SLOTS.map(function (slot) {
+    const o = trouverObjet(etatHero, etatHero.equipe[slot]);
+    return '<button class="equip-slot' + (o ? " is-filled" : "") + '" data-goto-slot="' + slot + '">' +
       '<span class="equip-slot-icon">' + SLOT_ICONS[slot] + "</span>" +
       '<span class="equip-slot-label">' + SLOT_LABELS[slot] + "</span>" +
-      '<span class="equip-slot-item">' + (item ? escapeHtml(itemDisplayName(item)) : "vide") + "</span>" +
+      '<span class="equip-slot-item">' + (o ? escapeHtml(itemDisplayName(o)) : "vide") + "</span>" +
       "</button>";
   }).join("");
 }
 
-function renderHeroShop(){
-  const gold = state.hero.gold;
-  document.getElementById("chestCommonBtn").disabled = gold < CHEST_COMMON_PRICE;
-  document.getElementById("chestRareBtn").disabled = gold < CHEST_RARE_PRICE;
-}
-
-function renderHeroInventory(){
+function renderInventaire() {
   const el = document.getElementById("heroInventory");
-  const hero = state.hero;
-  if(hero.inventory.length === 0){
-    el.innerHTML = '<p class="empty-state">Aucun objet. Le donjon et les coffres t\'en fourniront.</p>';
+  const inv = etatHero.inventaire;
+  if (inv.length === 0) {
+    el.innerHTML = '<p class="empty-state">Aucun objet. Le donjon et le coffre t\'en fourniront.</p>';
     return;
   }
+  el.innerHTML = SLOTS.map(function (slot) {
+    const items = inv.filter(function (o) { return o.slot === slot; });
+    if (items.length === 0) return "";
 
-  el.innerHTML = EQUIPMENT_SLOTS.map(function(slot){
-    const items = hero.inventory.filter(function(item){ return item.slot === slot; });
-    if(items.length === 0) return "";
+    const groupesRarete = {};
+    items.forEach(function (o) { (groupesRarete[o.rarete] = groupesRarete[o.rarete] || []).push(o); });
+
+    const fusionsHtml = RARETES.filter(function (r) { return r !== "legendaire"; }).map(function (r) {
+      const dispo = (groupesRarete[r] || []).filter(function (o) { return !estEquipe(etatHero, o.id); });
+      if (dispo.length < CONFIG.fusion.objetsRequis) return "";
+      const cout = coutFusion(r);
+      const suivante = RARETES[RARETES.indexOf(r) + 1];
+      return '<button class="btn-secondary fusion-btn" data-fusion-slot="' + slot + '" data-fusion-rarete="' + r + '"' +
+        (etatHero.or < cout ? " disabled" : "") + ">Fusionner 3× " + RARITY_LABELS[r] + " → " + RARITY_LABELS[suivante] +
+        " (🪙 " + cout + ")</button>";
+    }).join("");
+
     return '<div class="inv-group" id="inv-' + slot + '">' +
       '<div class="inv-group-title">' + SLOT_ICONS[slot] + " " + SLOT_LABELS[slot] + "</div>" +
-      items.map(function(item){
-        const equipped = hero.equipment[slot] === item.id;
+      fusionsHtml +
+      items.map(function (o) {
+        const equipe = etatHero.equipe[slot] === o.id;
         return '<div class="weapon-item">' +
           '<div class="weapon-info">' +
-          '<div class="weapon-name">' + escapeHtml(itemDisplayName(item)) +
-          ' <span class="weapon-rarity is-' + item.rarity + '">' + RARITY_LABELS[item.rarity] + "</span></div>" +
-          '<div class="weapon-bonus">' + escapeHtml(bonusLabel(item.bonus)) + "</div>" +
+          '<div class="weapon-name">' + escapeHtml(itemDisplayName(o)) +
+          ' <span class="weapon-rarity is-' + o.rarete + '">' + RARITY_LABELS[o.rarete] + "</span></div>" +
+          '<div class="weapon-bonus">Puissance ' + fmtStat(puissanceObjet(o)) + " · palier " + o.palier + " · cycle " + o.cycle + "</div>" +
           "</div>" +
-          (equipped
+          '<div class="weapon-actions">' +
+          (equipe
             ? '<button class="btn-secondary weapon-equip is-unequip" data-unequip="' + slot + '">Retirer</button>'
-            : '<button class="btn-secondary weapon-equip" data-equip="' + item.id + '">Équiper</button>') +
+            : '<button class="btn-secondary weapon-equip" data-equip="' + o.id + '">Équiper</button>' +
+              '<button class="btn-secondary weapon-sell" data-vendre="' + o.id + '">Vendre 🪙 ' + prixVente(o) + "</button>") +
+          "</div>" +
           "</div>";
       }).join("") +
       "</div>";
   }).join("");
 }
 
-/* ================= AMÉLIORATIONS À L'ESSENCE ================= */
-["force","endurance","vitesse"].forEach(function(stat){
-  document.getElementById("upgrade-" + stat).addEventListener("click", function(){
-    const cost = upgradeCost(stat);
-    if(state.hero.dungeon.essence < cost) return;
-    state.hero.dungeon.essence -= cost;
-    state.hero.essenceUpgrades[stat] += 1;
-    saveHero();
-    renderHero();
-    showToast("✨ " + stat + " +0,5 (" + fmtStat(baseStats()[stat]) + " de base)");
-  });
-});
-
-/* ================= TRÉSOR (GEMMES) ================= */
-document.getElementById("legendaryChestBtn").addEventListener("click", function(){
-  const hero = state.hero;
-  if(hero.gems < LEGENDARY_CHEST_GEMS) return;
-  hero.gems -= LEGENDARY_CHEST_GEMS;
-  const item = addItem(createItem("legendary"));
-  saveHero();
-  renderHero();
-  showToast("🌟 Légendaire : " + item.name + " (" + bonusLabel(item.bonus) + ")");
-});
-
-document.getElementById("forgeBtn").addEventListener("click", function(){
-  const hero = state.hero;
-  const item = findItem(document.getElementById("forgeSelect").value);
-  if(!item || hero.gems < FORGE_GEMS) return;
-  hero.gems -= FORGE_GEMS;
-  Object.keys(item.bonus).forEach(function(stat){ item.bonus[stat] += 1; });
-  item.upgradeCount += 1;
-  saveHero();
-  renderHero();
-  showToast("🔨 " + itemDisplayName(item) + " (" + bonusLabel(item.bonus) + ")");
-});
-
-/* ================= BOUTIQUE (OR) ================= */
-function openChest(rarity){
-  const hero = state.hero;
-  const price = rarity === "rare" ? CHEST_RARE_PRICE : CHEST_COMMON_PRICE;
-  if(hero.gold < price){
-    showToast("Il te manque " + (price - hero.gold) + " or.");
-    return;
-  }
-  hero.gold -= price;
-  const item = addItem(createItem(rarity));
-  saveHero();
-  renderHero();
-  showToast("🎁 " + item.name + " — " + SLOT_LABELS[item.slot] + " (" + bonusLabel(item.bonus) + ")");
+function renderAmeliorations() {
+  const btn = document.getElementById("upgradeAtqBtn");
+  const cout = coutAmeliorationEssence(etatHero);
+  btn.disabled = etatHero.essence < cout;
+  btn.querySelector(".upgrade-cost").textContent = "✨ " + cout;
 }
 
-document.getElementById("chestCommonBtn").addEventListener("click", function(){ openChest("common"); });
-document.getElementById("chestRareBtn").addEventListener("click", function(){ openChest("rare"); });
+function renderTresor() {
+  const select = document.getElementById("forgeSelect");
+  const inv = etatHero.inventaire;
+  const previous = select.value;
+  if (inv.length === 0) {
+    select.innerHTML = '<option value="">Aucun objet à forger</option>';
+    select.disabled = true;
+  } else {
+    select.disabled = false;
+    select.innerHTML = inv.map(function (o) {
+      return '<option value="' + o.id + '">' + escapeHtml(itemDisplayName(o)) + " — " + SLOT_LABELS[o.slot] +
+        " (forge " + o.forge + "/" + CONFIG.equipement.forgeMax + ")</option>";
+    }).join("");
+    if (inv.some(function (o) { return o.id === previous; })) select.value = previous;
+  }
+  const objetChoisi = trouverObjet(etatHero, select.value);
+  const coutF = objetChoisi ? coutForge(objetChoisi) : 0;
+  const forgeBtn = document.getElementById("forgeBtn");
+  forgeBtn.disabled = !objetChoisi || objetChoisi.forge >= CONFIG.equipement.forgeMax || etatHero.gemmes < coutF;
+  forgeBtn.textContent = "Forger 💎 " + (objetChoisi ? coutF : "—");
 
-/* ================= ÉQUIPEMENT ET INVENTAIRE ================= */
-document.getElementById("heroInventory").addEventListener("click", function(e){
+  const coffreBtn = document.getElementById("coffreBtn");
+  coffreBtn.disabled = etatHero.or < CONFIG.economie.coutCoffre;
+  coffreBtn.querySelector(".chest-price").textContent = "🪙 " + CONFIG.economie.coutCoffre + " or";
+}
+
+/* ================================================================
+   INTERACTIONS
+   ================================================================ */
+document.getElementById("descendreBtn").addEventListener("click", lancerDescente);
+
+document.getElementById("upgradeAtqBtn").addEventListener("click", function () {
+  try {
+    ameliorerEssence(etatHero);
+    sauvegarderEtatHero(etatHero);
+    renderHero();
+    showToast("⚔️ +1 ATQ permanent");
+  } catch (e) { showToast(e.message); }
+});
+
+document.getElementById("coffreBtn").addEventListener("click", function () {
+  try {
+    const objet = ouvrirCoffre(etatHero);
+    sauvegarderEtatHero(etatHero);
+    renderHero();
+    showToast("🎁 " + objet.nom + " — " + SLOT_LABELS[objet.slot] + " (" + RARITY_LABELS[objet.rarete] + ")");
+  } catch (e) { showToast(e.message); }
+});
+
+document.getElementById("forgeBtn").addEventListener("click", function () {
+  const id = document.getElementById("forgeSelect").value;
+  try {
+    const objet = forger(etatHero, id);
+    sauvegarderEtatHero(etatHero);
+    renderHero();
+    showToast("🔨 " + itemDisplayName(objet) + " renforcé");
+  } catch (e) { showToast(e.message); }
+});
+
+document.getElementById("heroInventory").addEventListener("click", function (e) {
   const equip = e.target.closest("[data-equip]");
-  if(equip){
-    const item = findItem(equip.dataset.equip);
-    if(!item) return;
-    state.hero.equipment[item.slot] = item.id; // un seul objet actif par emplacement
-    saveHero();
+  if (equip) {
+    const o = trouverObjet(etatHero, equip.dataset.equip);
+    if (o) {
+      etatHero.equipe[o.slot] = o.id; // un seul objet actif par emplacement
+      sauvegarderEtatHero(etatHero);
+      renderHero();
+    }
+    return;
+  }
+
+  const unequip = e.target.closest("[data-unequip]");
+  if (unequip) {
+    etatHero.equipe[unequip.dataset.unequip] = null;
+    sauvegarderEtatHero(etatHero);
     renderHero();
     return;
   }
-  const unequip = e.target.closest("[data-unequip]");
-  if(unequip){
-    state.hero.equipment[unequip.dataset.unequip] = null;
-    saveHero();
-    renderHero();
+
+  const vendre = e.target.closest("[data-vendre]");
+  if (vendre) {
+    try {
+      const res = vendreObjet(etatHero, vendre.dataset.vendre);
+      sauvegarderEtatHero(etatHero);
+      renderHero();
+      showToast("🪙 " + itemDisplayName(res.objet) + " vendu pour " + res.prix + " or");
+    } catch (err) { showToast(err.message); }
+    return;
+  }
+
+  const fusion = e.target.closest("[data-fusion-slot]");
+  if (fusion) {
+    const slot = fusion.dataset.fusionSlot;
+    const rarete = fusion.dataset.fusionRarete;
+    const candidats = etatHero.inventaire
+      .filter(function (o) { return o.slot === slot && o.rarete === rarete && !estEquipe(etatHero, o.id); })
+      .slice(0, CONFIG.fusion.objetsRequis)
+      .map(function (o) { return o.id; });
+    try {
+      const res = fusionner(etatHero, candidats);
+      sauvegarderEtatHero(etatHero);
+      renderHero();
+      showToast((res.sautDouble ? "✨✨ Fusion exceptionnelle : " : "✨ Fusion réussie : ") + itemDisplayName(res.objet));
+    } catch (err) { showToast(err.message); }
   }
 });
 
-document.getElementById("equipmentGrid").addEventListener("click", function(e){
+document.getElementById("equipmentGrid").addEventListener("click", function (e) {
   const btn = e.target.closest("[data-goto-slot]");
-  if(!btn) return;
+  if (!btn) return;
   const group = document.getElementById("inv-" + btn.dataset.gotoSlot);
   const target = group || document.querySelector(".hero-inventory-card");
   target.scrollIntoView({ behavior: "smooth", block: "center" });
 });
 
-document.getElementById("heroName").addEventListener("input", function(e){
-  state.hero.name = e.target.value;
-  saveHero();
+document.getElementById("heroName").addEventListener("input", function (e) {
+  etatHero.nom = e.target.value;
+  sauvegarderEtatHero(etatHero);
 });
-document.getElementById("heroName").addEventListener("blur", function(e){
-  if(!e.target.value.trim()){
-    state.hero.name = "Héros";
-    saveHero();
+document.getElementById("heroName").addEventListener("blur", function (e) {
+  if (!e.target.value.trim()) {
+    etatHero.nom = "Héros";
+    sauvegarderEtatHero(etatHero);
     renderHeroCharacter();
   }
 });
 
-// L'entrée dans l'onglet crédite d'abord le temps écoulé, puis affiche.
-function showHeroView(){
-  preloadAttackFrames();
-  catchUpDungeon();
+/* ================================================================
+   ENTRÉE DANS L'ONGLET
+   ================================================================ */
+function showHeroView() {
+  crediterDescentesQuotidiennes(etatHero, todayISO());
+  sauvegarderEtatHero(etatHero);
   renderHero();
 }
-
-// Une sauvegarde d'avant le combat continu n'a pas de monstre : on en pose un.
-if(ensureMonster()){ saveHero(); }
 
 registerView("hero", showHeroView);

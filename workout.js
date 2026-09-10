@@ -512,11 +512,8 @@ document.getElementById("finishSessionBtn").addEventListener("click", function()
   }
 
   // Seule porte d'entrée vers la progression du héros : une séance finalisée.
-  // hero.js affiche le message final, record inclus.
-  onWorkoutCompleted(session, { hasPR: beaten.length > 0, prMessage: prMessage });
-
-  // Nouveau système Mon Héros. hero.js ignore la structure de workout.js :
-  // on traduit ici vers le contrat de la spec (exercices / series / poids).
+  // hero.js ignore la structure de workout.js : on traduit ici vers le
+  // contrat de la spec (exercices / series / poids).
   const seance = {
     exercices: session.exercises.map(function(ex){
       return {
@@ -527,8 +524,18 @@ document.getElementById("finishSessionBtn").addEventListener("click", function()
     }),
     nbPR: beaten.length
   };
-  HERO.gagnerXP(seance, evalNutritionDuJour(session.date));
+  const gain = HERO.gagnerXP(seance, evalNutritionDuJour(session.date));
   HERO.ajusterMoral(CONFIG.moral.seance);
+  HERO.crediterDescente(CONFIG.descentes.bonusParSeance);
+
+  const heroParts = [];
+  if(prMessage){ heroParts.push(prMessage); }
+  heroParts.push("⚔️ +" + gain.final + " XP");
+  if(gain.niveauApres > gain.niveauAvant){
+    heroParts.push("⭐ Niveau " + gain.niveauApres + (gain.gemmesGagnees > 0 ? " · +" + gain.gemmesGagnees + " 💎" : ""));
+  }
+  heroParts.push("🗝️ +1 descente de donjon");
+  showToast(heroParts.join("  ·  "));
 });
 
 function sessionSetCount(session){

@@ -548,6 +548,21 @@ select#exerciseSelect{margin-bottom:14px;font-weight:600;}
   background:linear-gradient(90deg,var(--danger),#F59E0B);
   transition:width 0.4s ease;
 }
+.hero-hp-fill{
+  height:100%;border-radius:6px;
+  background:linear-gradient(90deg,var(--carb),var(--accent-2));
+  transition:width 0.4s ease;
+}
+.moral-fill{
+  height:100%;border-radius:6px;
+  background:linear-gradient(90deg,#8B5CF6,var(--accent-2));
+  transition:width 0.4s ease;
+}
+.hero-moral-label{margin-top:2px;}
+.hero-hp-line{margin-top:10px;}
+.descendre-btn{width:100%;margin:12px 0 10px;padding:12px;font-size:14px;}
+.descendre-btn:disabled{opacity:0.5;cursor:not-allowed;}
+.upgrade-btn-single{width:100%;justify-content:space-between;}
 .dungeon-result{margin:10px 0 4px;font-size:13px;font-weight:600;color:var(--text);}
 .dungeon-next{margin:0;font-size:12px;color:var(--text-tertiary);}
 .dungeon-log{margin-top:12px;}
@@ -627,16 +642,26 @@ select#exerciseSelect{margin-bottom:14px;font-weight:600;}
   font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:0.03em;
   padding:2px 7px;border-radius:999px;
 }
-.weapon-rarity.is-common{background:var(--bg-elevated-2);color:var(--text-tertiary);}
+.weapon-rarity.is-commun{background:var(--bg-elevated-2);color:var(--text-tertiary);}
 .weapon-rarity.is-rare{background:rgba(37,99,235,0.16);color:var(--accent-1);}
-.weapon-rarity.is-legendary{background:rgba(245,158,11,0.18);color:#B45309;}
-html[data-theme="dark"] .weapon-rarity.is-legendary{color:#FBBF24;}
+.weapon-rarity.is-ultraRare{background:rgba(20,184,166,0.16);color:var(--carb);}
+.weapon-rarity.is-mythique{background:rgba(139,92,246,0.18);color:#7C3AED;}
+.weapon-rarity.is-legendaire{background:rgba(245,158,11,0.18);color:#B45309;}
+html[data-theme="dark"] .weapon-rarity.is-mythique{color:#A78BFA;}
+html[data-theme="dark"] .weapon-rarity.is-legendaire{color:#FBBF24;}
 .weapon-equip.is-unequip{color:var(--text-secondary);}
 .weapon-bonus{font-size:12px;color:var(--text-secondary);margin-top:2px;}
 .weapon-equip{flex-shrink:0;padding:8px 14px;font-size:13px;}
+.weapon-actions{display:flex;flex-direction:column;gap:6px;flex-shrink:0;}
+.weapon-sell{flex-shrink:0;padding:8px 14px;font-size:12px;color:var(--text-secondary);}
 .weapon-equipped{
   flex-shrink:0;font-size:12px;font-weight:700;color:var(--carb);
 }
+.fusion-btn{
+  display:block;width:100%;margin-bottom:8px;padding:9px 12px;
+  font-size:12px;font-weight:700;text-align:left;
+}
+.fusion-btn:disabled{opacity:0.45;cursor:not-allowed;}
 
 /* Notification passagère */
 .toast{
